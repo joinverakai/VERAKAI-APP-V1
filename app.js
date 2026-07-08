@@ -670,6 +670,7 @@ function App() {
             evidenceCount,
             dailyPromisesKept,
             promises,
+            evidenceEntries,
             onSelectPromise: (promiseId) => startSelectedPromise(promiseId, "dashboard"),
             onBeginToday: () => {
               if (dailyPromisesKept === 3) return goToScreen("complete");
@@ -1086,53 +1087,80 @@ function getHomeActionLabel(completedCount) {
   return "Review Today";
 }
 
-function DashboardScreen({ greeting, builderGoal, dayStyle, trustScore, selfTrustLabel, builderScore, currentStreak, evidenceCount, dailyPromisesKept, promises, onSelectPromise, onBeginToday, onReset, onBack }) {
+function DashboardScreen({ greeting, builderGoal, dayStyle, trustScore, selfTrustLabel, builderScore, currentStreak, evidenceCount, dailyPromisesKept, promises, evidenceEntries, onSelectPromise, onBeginToday, onReset, onBack }) {
   const isComplete = dailyPromisesKept === 3;
   const homeActionLabel = getHomeActionLabel(dailyPromisesKept);
+  const missionLabel = isComplete ? "Mission Complete" : "Today's Mission";
+  const recentEvidence = evidenceEntries.slice(0, 2);
 
   return h(
     Screen,
     { step: 8, onBack, withBottomNav: true },
     h(
       "div",
-      { className: "pt-10" },
+      { className: "home-hero flex flex-col pt-10" },
       h("p", { className: "text-[0.72rem] font-medium uppercase tracking-[0.22em] text-midnight-300" }, "Builder Dashboard"),
       h("h1", { className: "headline-enter mt-4 text-[2.18rem] font-semibold leading-[1.02] tracking-[-0.02em]" }, greeting.greeting),
       greeting.status && h("p", { className: "mt-3 text-sm font-medium text-white/42" }, greeting.status),
       h(
         "div",
-        { className: "mt-8 rounded-lg border border-white/10 bg-white/[0.035] p-5" },
-        h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Building Toward"),
-        h("p", { className: "mt-3 text-[1rem] font-medium leading-7 text-white/82" }, builderGoal || "Set your Builder Goal.")
+        { className: "mt-12 rounded-lg border border-white/10 bg-white/[0.035] p-6" },
+        h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, missionLabel),
+        h("p", { className: "mt-4 text-[1.36rem] font-semibold leading-8 tracking-[-0.02em] text-white" }, builderGoal || "Set your Builder Goal."),
+        dayStyle && h("p", { className: "mt-5 text-sm font-medium text-midnight-300" }, dayStyle)
       ),
       h(
         "div",
-        { className: "mt-4 grid grid-cols-2 gap-3" },
-        h(StatCard, { label: isComplete ? "Mission Complete" : "Today's Mission", value: `${dailyPromisesKept}/3` }),
-        h(StatCard, { label: "Today's Style", value: dayStyle || "Choose" }),
-        h(StatCard, { label: "Today's Progress", value: `${dailyPromisesKept}/3` })
+        { className: "mt-8" },
+        h(PrimaryButton, { onClick: onBeginToday }, homeActionLabel)
       ),
-      isComplete && h("p", { className: "mt-4 text-sm font-semibold text-midnight-300" }, "3 / 3 Promises Kept"),
-      h("h2", { className: "mt-8 text-sm font-semibold uppercase tracking-[0.16em] text-white/45" }, "Today's Three Promises"),
-      promises.length
-        ? h(
-            "div",
-            { className: "mt-3 grid gap-3" },
-            promises.map((promise) =>
-              h(PromiseRow, { key: promise.id, promise, checked: promise.completed, onClick: isComplete ? null : () => onSelectPromise(promise.id) })
-            )
-          )
-        : h(EmptyState, { title: "No Promises", copy: "Create today's three promises." })
+      h(
+        "div",
+        { className: "mt-8 rounded-lg border border-midnight-300/20 bg-midnight-500/10 p-5" },
+        h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Today's Progress"),
+        h("p", { className: "mt-3 text-4xl font-semibold tracking-[-0.04em] text-white" }, `${dailyPromisesKept}/3`),
+        isComplete && h("p", { className: "mt-2 text-sm font-semibold text-midnight-300" }, "Promises Kept")
+      )
     ),
-    h("div", { className: "mt-7" }, h(PrimaryButton, { onClick: onBeginToday }, homeActionLabel)),
     h(
       "div",
-      { className: "mt-8 grid grid-cols-2 gap-3" },
-      h(StatCard, { label: "Self-Trust", value: trustScore, detail: selfTrustLabel, hero: true }),
-      h(StatCard, { label: "Promises Kept", value: `${dailyPromisesKept}/3` }),
-      h(StatCard, { label: "Builder Score", value: builderScore }),
-      h(StatCard, { label: "Current Streak", value: currentStreak }),
-      h(StatCard, { label: "Evidence Collected", value: evidenceCount })
+      { className: "mt-12 grid gap-10" },
+      h(
+        "section",
+        null,
+        h("h2", { className: "text-sm font-semibold uppercase tracking-[0.16em] text-white/45" }, "Today's Promises"),
+        promises.length
+          ? h(
+              "div",
+              { className: "mt-3 grid gap-3" },
+              promises.map((promise) =>
+                h(PromiseRow, { key: promise.id, promise, checked: promise.completed, onClick: isComplete ? null : () => onSelectPromise(promise.id) })
+              )
+            )
+          : h(EmptyState, { title: "No Promises", copy: "Create today's three promises." })
+      ),
+      h(
+        "section",
+        null,
+        h("h2", { className: "text-sm font-semibold uppercase tracking-[0.16em] text-white/45" }, "Builder Metrics"),
+        h(
+          "div",
+          { className: "mt-3 grid grid-cols-2 gap-3" },
+          h(StatCard, { label: "Self-Trust", value: trustScore, detail: selfTrustLabel, hero: true }),
+          h(StatCard, { label: "Promises Kept", value: `${dailyPromisesKept}/3` }),
+          h(StatCard, { label: "Builder Score", value: builderScore }),
+          h(StatCard, { label: "Current Streak", value: currentStreak }),
+          h(StatCard, { label: "Evidence Collected", value: evidenceCount })
+        )
+      ),
+      h(
+        "section",
+        null,
+        h("h2", { className: "text-sm font-semibold uppercase tracking-[0.16em] text-white/45" }, "Recent Evidence"),
+        recentEvidence.length
+          ? h("div", { className: "mt-3 grid gap-3" }, recentEvidence.map((entry) => h(EvidenceEntryCard, { key: entry.id, entry })))
+          : h(EmptyState, { title: "No evidence yet.", copy: "Keep one promise to begin the record." })
+      )
     ),
     h("button", { className: "mt-6 text-left text-xs font-semibold text-white/30 transition hover:text-white/50", type: "button", onClick: onReset }, "Reset Prototype")
   );
@@ -1152,59 +1180,74 @@ function PromisesScreen({
   onStartPromise,
   onBack
 }) {
+  const isChoosingPromise = hasSeenDashboard;
+
   return h(
     Screen,
     { step: 7, onBack, withBottomNav: true },
     h(SectionIntro, {
       label: "Today",
-      title: "Today's Promises",
-      copy: dayStyle ? `Starting points for ${dayStyle}. Edit anything until the promises are yours.` : "Choose a Builder style first."
+      title: isChoosingPromise ? "Choose today's promise." : "Today's Promises",
+      copy: isChoosingPromise ? "Select one. Enter Focus Mode." : dayStyle ? `Starting points for ${dayStyle}. Edit anything until the promises are yours.` : "Choose a Builder style first."
     }),
-    h(
-      "div",
-      { className: "mt-7 rounded-lg border border-midnight-300/20 bg-midnight-500/10 p-4" },
-      h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Daily promises kept"),
-      h("p", { className: "mt-2 text-2xl font-semibold tracking-[-0.03em] text-white" }, `${dailyPromisesKept}/3`)
-    ),
-    h(
-      "div",
-      { className: "mt-4 rounded-lg border border-white/10 bg-white/[0.035] p-4" },
-      h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Today's Style"),
-      h("p", { className: "mt-2 text-lg font-semibold text-white/84" }, dayStyle || "Choose a style")
-    ),
-    dayStyle &&
+    isChoosingPromise &&
       h(
         "div",
-        { className: "mt-5 rounded-lg border border-white/10 bg-white/[0.035] p-4" },
-        h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Guided suggestions"),
-        h("p", { className: "mt-2 text-sm leading-6 text-white/48" }, "Tap one to fill the next open promise. Edit anything."),
+        { className: "mt-8 grid gap-3" },
+        promises.length
+          ? promises.map((promise) =>
+              h(PromiseChoiceCard, {
+                key: promise.id,
+                promise,
+                completed: promise.completed,
+                onClick: () => onStartPromise(promise.id)
+              })
+            )
+          : h(EmptyState, { title: "No Promises", copy: "Create today's three promises first." }),
         h(
           "div",
-          { className: "mt-4 grid gap-2" },
-          suggestions.map((suggestion) =>
+          { className: "mt-4 rounded-lg border border-midnight-300/20 bg-midnight-500/10 p-4" },
+          h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Today"),
+          h("p", { className: "mt-2 text-2xl font-semibold tracking-[-0.03em] text-white" }, `${dailyPromisesKept}/3`)
+        )
+      ),
+    !isChoosingPromise &&
+      h(
+        React.Fragment,
+        null,
+        h(
+          "div",
+          { className: "mt-7 rounded-lg border border-white/10 bg-white/[0.035] p-4" },
+          h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Today's Style"),
+          h("p", { className: "mt-2 text-lg font-semibold text-white/84" }, dayStyle || "Choose a style")
+        ),
+        dayStyle &&
+          h(
+            "div",
+            { className: "mt-5 rounded-lg border border-white/10 bg-white/[0.035] p-4" },
+            h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Guided suggestions"),
             h(
-              "button",
-              {
-                key: suggestion.title,
-                className: "suggestion-button card-press",
-                type: "button",
-                onClick: () => onUseSuggestion(suggestion)
-              },
-              h("span", { className: "block text-sm font-semibold text-white/84" }, suggestion.title),
-              h("span", { className: "mt-1 block text-xs text-white/38" }, `${suggestion.category} / ${suggestion.estimate}`)
+              "div",
+              { className: "mt-4 grid gap-2" },
+              suggestions.map((suggestion) =>
+                h(
+                  "button",
+                  {
+                    key: suggestion.title,
+                    className: "suggestion-button card-press",
+                    type: "button",
+                    onClick: () => onUseSuggestion(suggestion)
+                  },
+                  h("span", { className: "block text-sm font-semibold text-white/84" }, suggestion.title),
+                  h("span", { className: "mt-1 block text-xs text-white/38" }, `${suggestion.category} / ${suggestion.estimate}`)
+                )
+              )
             )
           )
-        )
       ),
     h(
       "div",
-      { className: "mt-5 rounded-lg border border-white/10 bg-white/[0.035] p-5" },
-      h("p", { className: "text-sm font-semibold text-white/86" }, "A promise must:"),
-      h("div", { className: "mt-4 grid gap-2 text-sm leading-5 text-white/58" }, ["Be measurable", "Be completable today", "Be binary", "Move your life forward"].map((rule) => h("p", { key: rule }, rule)))
-    ),
-    h(
-      "div",
-      { className: "mt-5 grid gap-3" },
+      { className: `${isChoosingPromise ? "hidden" : "mt-5 grid gap-3"}` },
       promises.map((promise, index) =>
         h(
           "div",
@@ -1235,22 +1278,32 @@ function PromisesScreen({
             })
           ),
           promise.completed && h("p", { className: "mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-midnight-300" }, "Evidence Added"),
-          h(
-            "div",
-            { className: "mt-3 grid gap-2" },
-            h(SecondaryButton, { onClick: () => onStartPromise(promise.id) }, "Start This Promise"),
-            !promise.completed && h("p", { className: "text-xs leading-5 text-white/35" }, "Fill every field before beginning.")
-          )
+          !promise.completed && h("p", { className: "mt-3 text-xs leading-5 text-white/35" }, "Fill every field before beginning.")
         )
       )
     ),
-    h(
-      "div",
-      { className: "mt-4 grid gap-3" },
-      isLocked && h("p", { className: "text-center text-xs font-medium uppercase tracking-[0.16em] text-midnight-300" }, "Today's commitments are locked."),
-      message && h("p", { className: "text-center text-xs font-medium leading-5 text-white/42" }, message),
-      h(PrimaryButton, { onClick: onValidatePromises }, hasSeenDashboard ? "Choose a Promise to Begin" : "Continue to Dashboard")
-    )
+    !isChoosingPromise &&
+      h(
+        "div",
+        { className: "mt-4 grid gap-3" },
+        isLocked && h("p", { className: "text-center text-xs font-medium uppercase tracking-[0.16em] text-midnight-300" }, "Today's commitments are locked."),
+        message && h("p", { className: "text-center text-xs font-medium leading-5 text-white/42" }, message),
+        h(PrimaryButton, { onClick: onValidatePromises }, "Continue to Dashboard")
+      )
+  );
+}
+
+function PromiseChoiceCard({ promise, completed, onClick }) {
+  return h(
+    "button",
+    {
+      type: "button",
+      onClick,
+      className: `promise-choice-card card-press ${completed ? "completed" : ""}`
+    },
+    h("span", { className: "block text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/32" }, completed ? "Completed" : "Start This Promise"),
+    h("span", { className: "mt-3 block text-[1.12rem] font-semibold leading-6 text-white/88" }, promise.title || "Untitled promise"),
+    h("span", { className: "mt-4 block text-sm font-medium text-white/42" }, `${promise.category || "Category"} / ${promise.estimate || "Time"}`)
   );
 }
 
@@ -1268,33 +1321,23 @@ function SelectControl({ label, value, options, onChange }) {
   );
 }
 
-function PromiseSessionScreen({ promise, elapsedSeconds, sessionStarted, onBegin, onPause, onComplete, onExitFocus, onBack }) {
+function PromiseSessionScreen({ promise, onComplete, onExitFocus, onBack }) {
   return h(
     Screen,
     { step: 9, onBack },
     h(
       "div",
-      { className: "flex flex-1 flex-col justify-center py-12" },
+      { className: "focus-mode flex flex-1 flex-col justify-center py-12" },
       h("p", { className: "mb-4 text-xs font-medium uppercase tracking-[0.22em] text-midnight-300" }, "Current Promise"),
-      h("h1", { className: "headline-enter text-[2.28rem] font-semibold leading-[1.02] tracking-[-0.02em]" }, sessionStarted ? "Current Promise" : promise.title),
-      !sessionStarted &&
-        h("p", { className: "mt-5 text-[0.96rem] leading-6 text-white/55" }, "Keep this promise. Nothing else matters right now."),
-      sessionStarted
-        ? h("strong", { className: "score-number mt-10 block text-7xl font-semibold tracking-[-0.05em]" }, formatElapsed(elapsedSeconds))
-        : h(
-            "div",
-            { className: "mt-8 grid grid-cols-2 gap-3" },
-            h(StatCard, { label: "Category", value: promise.category }),
-            h(StatCard, { label: "Estimated Time", value: promise.estimate })
-          )
+      h("h1", { className: "headline-enter text-[2.32rem] font-semibold leading-[1.02] tracking-[-0.02em]" }, promise.title),
+      h("p", { className: "mt-6 text-sm font-semibold uppercase tracking-[0.18em] text-white/35" }, "Estimated Time"),
+      h("p", { className: "mt-3 text-[1.16rem] font-semibold text-white/82" }, promise.estimate || "Today")
     ),
     h(
       "div",
       { className: "mt-auto grid gap-3" },
-      !sessionStarted && h(PrimaryButton, { onClick: onBegin }, "Begin Promise"),
-      sessionStarted && h(SecondaryButton, { onClick: onPause }, "Pause"),
-      sessionStarted && h(PrimaryButton, { onClick: onComplete }, "Complete Promise"),
-      h("button", { className: "text-sm font-semibold text-white/35 transition hover:text-white/55", type: "button", onClick: onExitFocus }, "Exit Focus")
+      h(PrimaryButton, { onClick: onComplete }, "Complete Promise"),
+      h(SecondaryButton, { onClick: onExitFocus }, "Back")
     )
   );
 }
@@ -1473,45 +1516,31 @@ function TomorrowPromisesScreen({ promises, dayStyle, onUpdatePromise, onDone, o
   );
 }
 
-function EvidenceTimelineScreen({ evidenceCount, promisesKept, currentStreak, builderGoal, evidenceEntries, onBack }) {
+function EvidenceTimelineScreen({ evidenceEntries, onBack }) {
   return h(
     Screen,
     { onBack, withBottomNav: true },
     h(SectionIntro, {
       label: "Evidence",
       title: "Evidence",
-      copy: "Every promise kept becomes proof."
+      copy: "A record of promises kept."
     }),
     h(
       "div",
-      { className: "mt-7 rounded-lg border border-white/10 bg-white/[0.035] p-5" },
-      h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Current Builder Goal"),
-      h("p", { className: "mt-3 text-[1rem] font-medium leading-7 text-white/82" }, builderGoal || "Set the future you're building toward.")
+      { className: "mt-10 grid gap-5" },
+      evidenceEntries.length
+        ? evidenceEntries.map((entry) => h(EvidenceEntryCard, { key: entry.id, entry }))
+        : h(EmptyState, { title: "No evidence yet.", copy: "Keep your first promise to begin the record." })
     ),
-    h(
-      "div",
-      { className: "mt-5 grid grid-cols-3 gap-3" },
-      h(StatCard, { label: "Evidence Collected", value: evidenceCount }),
-      h(StatCard, { label: "Current Streak", value: currentStreak }),
-      h(StatCard, { label: "Lifetime Promises", value: promisesKept })
-    ),
-    evidenceEntries.length
-      ? h(
-          "div",
-          { className: "mt-8 grid gap-4" },
-          evidenceEntries.map((entry) => h(EvidenceEntryCard, { key: entry.id, entry }))
-        )
-      : h(EmptyState, { title: "No evidence yet.", copy: "Keep your first promise to begin building proof." })
   );
 }
 
 function EvidenceEntryCard({ entry }) {
   return h(
     "article",
-    { className: "evidence-entry rounded-lg border border-white/10 bg-white/[0.035] p-5" },
-    h("p", { className: "text-xs uppercase tracking-[0.18em] text-midnight-300" }, `${entry.date}${entry.time ? ` / ${entry.time}` : ""}`),
-    h("h2", { className: "mt-3 text-[1.05rem] font-semibold leading-6 text-white/88" }, entry.promiseTitle),
-    h("p", { className: "mt-4 text-[0.96rem] leading-7 text-white/62" }, entry.reflection || "Evidence saved. You kept the promise."),
+    { className: "evidence-entry rounded-lg border border-white/10 bg-white/[0.035] p-6" },
+    h("p", { className: "text-[1.05rem] font-medium leading-7 text-white/78" }, entry.reflection || "Evidence saved. You kept the promise."),
+    h("h2", { className: "mt-5 text-sm font-semibold leading-6 text-white/88" }, entry.promiseTitle),
     entry.selectedEvidenceChips?.length
       ? h(
           "div",
@@ -1521,7 +1550,9 @@ function EvidenceEntryCard({ entry }) {
       : null,
     h(
       "div",
-      { className: "mt-5 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/35" },
+      { className: "mt-6 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/35" },
+      h("span", null, `${entry.date}${entry.time ? ` / ${entry.time}` : ""}`),
+      h("span", null, "/"),
       entry.dayStyle && h("span", null, entry.dayStyle),
       entry.dayStyle && h("span", null, "/"),
       h("span", null, entry.category || "Uncategorized"),
@@ -1541,29 +1572,40 @@ function EmptyState({ title, copy }) {
   );
 }
 
-function ProfileScreen({ userName, builderSince, builderGoal, trustScore, identityLabel, builderScore, evidenceCount, promisesKept, currentStreak, onBack }) {
+function ProfileScreen({ userName, builderSince, builderGoal, identityLabel, evidenceCount, promisesKept, currentStreak, onBack }) {
   return h(
     Screen,
     { onBack, withBottomNav: true },
     h(SectionIntro, {
       label: "Identity",
       title: "Builder Profile",
-      copy: "You are becoming someone who follows through."
+      copy: "The story your evidence is writing."
     }),
     h(
       "div",
-      { className: "mt-8 grid grid-cols-2 gap-3" },
-      h(StatCard, { label: "Name", value: userName || "Builder", hero: true }),
-      h(StatCard, { label: "Builder Since", value: builderSince }),
-      h(StatCard, { label: "Self-Trust", value: trustScore }),
-      h(StatCard, { label: "Builder Score", value: builderScore }),
-      h(StatCard, { label: "Identity", value: identityLabel }),
-      h(StatCard, { label: "Current Builder Goal", value: builderGoal || "No Builder Goal" }),
-      h(StatCard, { label: "Evidence", value: evidenceCount }),
-      h(StatCard, { label: "Promises Kept", value: promisesKept }),
-      h(StatCard, { label: "Streak", value: currentStreak })
+      { className: "profile-story-card mt-10 rounded-lg border border-white/10 bg-white/[0.035] p-6" },
+      h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Current Identity"),
+      h("h2", { className: "mt-4 text-[1.6rem] font-semibold leading-8 tracking-[-0.02em] text-white" }, identityLabel),
+      h("p", { className: "mt-5 text-sm leading-6 text-white/52" }, `${userName || "Builder"} is building toward ${builderGoal || "a clear Builder Goal"}.`)
     ),
-    h("p", { className: "mt-8 text-center text-sm font-medium leading-6 text-white/48" }, "You are becoming someone who follows through.")
+    h(
+      "div",
+      { className: "mt-8 grid gap-3" },
+      h(ProfileStoryRow, { label: "Builder Since", value: builderSince }),
+      h(ProfileStoryRow, { label: "Current Goal", value: builderGoal || "No Builder Goal" }),
+      h(ProfileStoryRow, { label: "Current Streak", value: `${currentStreak} ${currentStreak === 1 ? "day" : "days"}` }),
+      h(ProfileStoryRow, { label: "Lifetime Promises", value: promisesKept }),
+      h(ProfileStoryRow, { label: "Evidence Collected", value: evidenceCount })
+    )
+  );
+}
+
+function ProfileStoryRow({ label, value }) {
+  return h(
+    "div",
+    { className: "profile-story-row flex items-center justify-between gap-5 rounded-lg border border-white/10 bg-white/[0.03] p-4" },
+    h("p", { className: "text-sm font-medium text-white/48" }, label),
+    h("p", { className: "text-right text-sm font-semibold text-white/84" }, value)
   );
 }
 
