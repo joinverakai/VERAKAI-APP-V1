@@ -20,14 +20,13 @@ for (const phrase of [
   "Become financially free",
   "Build confidence",
   "How much do you trust yourself today?",
-  "What kind of Builder do you need to be today?",
-  "We'll help you build today's plan.",
-  "Today's Style",
-  "Finish one important task.",
-  "Wake up on time.",
-  "One uninterrupted deep work session.",
-  "Guided suggestions",
-  "Choose a Builder style first.",
+  "Suggested for your Builder Goal",
+  "Launch my business",
+  "Build for 60 minutes",
+  "Reach out to 5 prospects",
+  "Lose 20 pounds",
+  "Walk 10,000 steps",
+  "Choose three promises for today.",
   "Continue to Dashboard",
   "Choose today's promise.",
   "Select one. Enter Focus Mode.",
@@ -43,21 +42,19 @@ for (const phrase of [
   "Today's Promises",
   "Start This Promise",
   "Estimated Time",
-  "Evidence Added",
+  "Journey Added",
   "You kept your word.",
   "What did this promise prove?",
   "Builder Report",
   "Today's Goal",
-  "Today's Style",
   "Promises Completed",
-  "Evidence Created",
-  "Would you like to prepare tomorrow?",
+  "Journey Entries",
   "What did today prove about you?",
-  "Prepare Tomorrow",
+  "Return Home",
   "Locked until tomorrow",
-  "Evidence Collected",
-  "No evidence yet.",
-  "Keep your first promise to begin the record.",
+  "Journey",
+  "No Journey entry.",
+  "Keep a promise to add this day to your Journey.",
   "Lifetime Promises",
   "Builder Profile",
   "Builder Since",
@@ -73,17 +70,17 @@ for (const phrase of [
   "Self-Trust Score",
   "builderCoachData",
   "evidenceEntries",
-  "dayStyle",
   "tomorrowsPromises",
   "lastActiveDate",
   "completionRate",
-  "verakai-prototype-state-v5",
-  "Step ${step} of 11"
+  "verakai-prototype-state-v5"
 ]) {
   assert.ok(app.includes(phrase), `App should include: ${phrase}`);
 }
 
-for (const demoPhrase of ["Lift for 60 Minutes", "Build VERAKAI for 2 Hours", "Read 10 Pages", "Momentum built"]) {
+assert.ok(!app.includes("progress-indicator"), "App should not render header progress text");
+
+for (const demoPhrase of ["Lift for 60 Minutes", "Build VERAKAI for 2 Hours", "Read 10 Pages", "Momentum built", "Today's Style", "What kind of Builder do you need to be today?"]) {
   assert.ok(!app.includes(demoPhrase), `App should not include demo data: ${demoPhrase}`);
 }
 
@@ -106,5 +103,10 @@ assert.ok(styles.includes(".promise-select:hover"), "Select hover styles should 
 assert.ok(styles.includes(".evidence-entry"), "Evidence journal card styles should exist");
 assert.ok(styles.includes(".evidence-pill"), "Evidence chip display styles should exist");
 assert.ok(styles.includes(".success-mark"), "Promise kept success styles should exist");
+assert.ok(styles.includes(".builder-calendar"), "Builder calendar styles should exist");
+assert.ok(styles.includes(".bottom-sheet"), "Promise suggestion sheet styles should exist");
+assert.ok(styles.includes("touch-action: manipulation"), "Tappable controls should use touch-action manipulation");
+assert.ok(styles.includes(".onboarding-card"), "Starting Point cards should have fast dedicated tap styles");
+assert.ok(!styles.includes(".progress-indicator"), "Progress indicator styles should be removed");
 
 console.log("VERAKAI prototype smoke test passed.");
