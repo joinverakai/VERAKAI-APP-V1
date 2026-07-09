@@ -73,11 +73,12 @@ for (const phrase of [
   "tomorrowsPromises",
   "lastActiveDate",
   "completionRate",
-  "verakai-prototype-state-v5",
-  "Step ${step} of 5"
+  "verakai-prototype-state-v5"
 ]) {
   assert.ok(app.includes(phrase), `App should include: ${phrase}`);
 }
+
+assert.ok(!app.includes("Step ${step} of"), "App should not render step counter text");
 
 for (const demoPhrase of ["Lift for 60 Minutes", "Build VERAKAI for 2 Hours", "Read 10 Pages", "Momentum built", "Today's Style", "What kind of Builder do you need to be today?"]) {
   assert.ok(!app.includes(demoPhrase), `App should not include demo data: ${demoPhrase}`);
@@ -104,5 +105,6 @@ assert.ok(styles.includes(".evidence-pill"), "Evidence chip display styles shoul
 assert.ok(styles.includes(".success-mark"), "Promise kept success styles should exist");
 assert.ok(styles.includes(".builder-calendar"), "Builder calendar styles should exist");
 assert.ok(styles.includes(".bottom-sheet"), "Promise suggestion sheet styles should exist");
+assert.ok(styles.includes("touch-action: manipulation"), "Tappable controls should use touch-action manipulation");
 
 console.log("VERAKAI prototype smoke test passed.");

@@ -848,7 +848,7 @@ function PhoneAtmosphere() {
   );
 }
 
-function Screen({ eyebrow = "VERAKAI", step, onBack, withBottomNav = false, children, footer }) {
+function Screen({ eyebrow = "VERAKAI", onBack, withBottomNav = false, children, footer }) {
   return h(
     "section",
     { className: `screen-scroll relative z-10 flex min-h-[760px] flex-1 flex-col overflow-y-auto px-7 pb-8 pt-7 sm:min-h-0 ${withBottomNav ? "with-bottom-nav" : ""}` },
@@ -861,9 +861,7 @@ function Screen({ eyebrow = "VERAKAI", step, onBack, withBottomNav = false, chil
         onBack && h("button", { className: "back-button", type: "button", onClick: onBack, "aria-label": "Go back" }, "Back"),
         h("p", { className: "text-[0.72rem] font-semibold tracking-[0.34em] text-white" }, eyebrow)
       ),
-      step
-        ? h("p", { key: step, className: "progress-indicator text-[0.68rem] font-medium uppercase tracking-[0.18em] text-white/38" }, `Step ${step} of 5`)
-        : h("span", { className: "h-2 w-2 rounded-full bg-midnight-300 shadow-[0_0_24px_rgba(111,147,200,0.85)]" })
+      h("span", { className: "h-2 w-2 rounded-full bg-midnight-300/80 shadow-[0_0_18px_rgba(111,147,200,0.48)]", "aria-hidden": true })
     ),
     children,
     footer && h("footer", { className: "mt-auto pt-6" }, footer)
@@ -878,7 +876,7 @@ function PrimaryButton({ children, onClick, disabled = false }) {
       disabled,
       onClick,
       className:
-        "group flex h-14 min-h-11 w-full items-center justify-center rounded-lg border border-midnight-300/70 bg-midnight-500 px-5 text-sm font-semibold tracking-[0.08em] text-white shadow-soft transition duration-200 hover:bg-midnight-400 focus:outline-none focus:ring-4 focus:ring-midnight-300/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/10 disabled:text-white/40"
+        "group flex h-14 min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center rounded-lg border border-midnight-300/70 bg-midnight-500 px-5 text-sm font-semibold tracking-[0.08em] text-white shadow-soft transition duration-[100ms] hover:bg-midnight-400 focus:outline-none focus:ring-4 focus:ring-midnight-300/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/10 disabled:text-white/40"
     },
     children
   );
@@ -892,7 +890,7 @@ function SecondaryButton({ children, onClick, disabled = false }) {
       disabled,
       onClick,
       className:
-        "group flex min-h-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/76 transition duration-200 hover:border-white/20 hover:bg-white/[0.055] focus:outline-none focus:ring-4 focus:ring-midnight-300/15 disabled:cursor-not-allowed disabled:text-white/30"
+        "group flex min-h-11 cursor-pointer touch-manipulation items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/76 transition duration-[100ms] hover:border-white/20 hover:bg-white/[0.055] focus:outline-none focus:ring-4 focus:ring-midnight-300/15 disabled:cursor-not-allowed disabled:text-white/30"
     },
     children
   );
@@ -925,7 +923,7 @@ function PromiseRow({ promise, checked = false, onClick }) {
       type: "button",
       onClick,
       className: [
-        "card-press flex min-h-14 w-full items-center gap-3 rounded-lg border px-4 text-left transition hover:border-white/20 hover:bg-white/[0.055] focus:outline-none focus:ring-4 focus:ring-midnight-300/15",
+        "card-press flex min-h-14 w-full cursor-pointer touch-manipulation items-center gap-3 rounded-lg border px-4 text-left transition duration-[100ms] hover:border-white/20 hover:bg-white/[0.055] focus:outline-none focus:ring-4 focus:ring-midnight-300/15",
         checked ? "border-midnight-300/25 bg-midnight-500/10 text-white/62" : "border-white/10 bg-white/[0.035] text-white/84"
       ].join(" ")
     },
@@ -1049,7 +1047,7 @@ function SelectableCard({ label, selected, onClick }) {
       type: "button",
       onClick,
       className: [
-        "card-press min-h-[96px] rounded-lg border px-4 py-4 text-left transition duration-200 focus:outline-none focus:ring-4 focus:ring-midnight-300/15",
+        "card-press min-h-[96px] cursor-pointer touch-manipulation rounded-lg border px-4 py-4 text-left transition duration-[100ms] focus:outline-none focus:ring-4 focus:ring-midnight-300/15",
         selected
           ? "border-midnight-300/80 bg-midnight-500/20 text-white shadow-[inset_0_0_0_1px_rgba(111,147,200,0.18)]"
           : "border-white/10 bg-white/[0.035] text-white/72 hover:border-white/20 hover:bg-white/[0.055]"
@@ -1235,7 +1233,7 @@ function DashboardScreen({ greeting, builderGoal, trustScore, selfTrustLabel, bu
           : h(EmptyState, { title: "No Journey entries yet.", copy: "Keep one promise to begin the record." })
       )
     ),
-    h("button", { className: "mt-6 text-left text-xs font-semibold text-white/30 transition hover:text-white/50", type: "button", onClick: onReset }, "Reset Prototype")
+    h("button", { className: "mt-6 cursor-pointer touch-manipulation text-left text-xs font-semibold text-white/30 transition duration-[100ms] hover:text-white/50", type: "button", onClick: onReset }, "Reset Prototype")
   );
 }
 
@@ -1744,7 +1742,7 @@ function SettingsScreen({ nameDraft, nameError, onNameChange, onSaveName, onRese
         "div",
         { className: "rounded-lg border border-white/10 bg-white/[0.035] p-4" },
         h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Prototype"),
-        h("button", { className: "mt-3 text-sm font-semibold text-white/55 transition hover:text-white/78", type: "button", onClick: onReset }, "Reset Prototype")
+        h("button", { className: "mt-3 cursor-pointer touch-manipulation text-sm font-semibold text-white/55 transition duration-[100ms] hover:text-white/78", type: "button", onClick: onReset }, "Reset Prototype")
       ),
       h(
         "div",
