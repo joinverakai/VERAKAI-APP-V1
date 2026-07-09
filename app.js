@@ -942,7 +942,6 @@ function WelcomeScreen({ onBegin }) {
   return h(
     Screen,
     {
-      step: 1,
       footer: h(
         "p",
         { className: "mx-auto max-w-[300px] text-center text-[0.82rem] leading-6 text-white/55" },
@@ -967,7 +966,7 @@ function WelcomeScreen({ onBegin }) {
 function NameScreen({ nameDraft, error, onNameChange, onContinue, onBack }) {
   return h(
     Screen,
-    { step: 2, onBack },
+    { onBack },
     h(SectionIntro, {
       label: "Identity",
       title: "What should we call you?",
@@ -992,7 +991,7 @@ function NameScreen({ nameDraft, error, onNameChange, onContinue, onBack }) {
 function BuildScreen({ selectedAreas, onToggleArea, onContinue, onBack }) {
   return h(
     Screen,
-    { step: 3, onBack },
+    { onBack },
     h(SectionIntro, {
       label: "Starting point",
       title: "Where do you want to keep more promises?",
@@ -1012,7 +1011,7 @@ function BuilderGoalScreen({ builderGoalDraft, error, onGoalChange, onContinue, 
 
   return h(
     Screen,
-    { step: 4, onBack },
+    { onBack },
     h(SectionIntro, {
       label: "Direction",
       title: "What are you building toward?",
@@ -1047,7 +1046,7 @@ function SelectableCard({ label, selected, onClick }) {
       type: "button",
       onClick,
       className: [
-        "card-press min-h-[96px] cursor-pointer touch-manipulation rounded-lg border px-4 py-4 text-left transition duration-[100ms] focus:outline-none focus:ring-4 focus:ring-midnight-300/15",
+        "onboarding-card min-h-[96px] rounded-lg border px-4 py-4 text-left focus:outline-none focus:ring-4 focus:ring-midnight-300/15",
         selected
           ? "border-midnight-300/80 bg-midnight-500/20 text-white shadow-[inset_0_0_0_1px_rgba(111,147,200,0.18)]"
           : "border-white/10 bg-white/[0.035] text-white/72 hover:border-white/20 hover:bg-white/[0.055]"
@@ -1063,7 +1062,7 @@ function AssessmentScreen({ trustScore, onScoreChange, onContinue, onBack }) {
 
   return h(
     Screen,
-    { step: 5, onBack },
+    { onBack },
     h(
       "div",
       { className: "pt-12" },
