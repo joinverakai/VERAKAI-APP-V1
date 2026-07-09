@@ -5,32 +5,34 @@ const storageKey = "verakai-prototype-state-v5";
 const onboardingAreas = ["Fitness", "Business", "Consistency", "Confidence", "Money", "Purpose"];
 const promiseCategories = ["Fitness", "Business", "Discipline", "Focus", "Confidence", "Learning", "Money", "Purpose", "Relationships", "Health"];
 const estimateOptions = ["10 min", "20 min", "30 min", "60 min", "2 hr", "Today"];
-const dayStyleOptions = ["Momentum", "Discipline", "Focus", "Confidence", "Recovery"];
-const promiseSuggestions = {
-  Momentum: [
-    ["Finish one important task.", "Business", "60 min"],
-    ["Move your body for 30 minutes.", "Fitness", "30 min"],
-    ["Read for 20 minutes.", "Learning", "20 min"]
+const goalSuggestionGroups = {
+  business: [
+    ["Build for 60 minutes", "Business", "60 min"],
+    ["Reach out to 5 prospects", "Business", "30 min"],
+    ["Finish one important feature", "Business", "60 min"],
+    ["Review finances", "Money", "30 min"],
+    ["Plan tomorrow", "Purpose", "10 min"]
   ],
-  Discipline: [
-    ["Wake up on time.", "Discipline", "Today"],
-    ["Complete one difficult task first.", "Business", "60 min"],
-    ["No unnecessary social media until evening.", "Purpose", "Today"]
+  fitness: [
+    ["Lift for 45 minutes", "Fitness", "60 min"],
+    ["Walk 10,000 steps", "Fitness", "Today"],
+    ["Hit protein goal", "Health", "Today"],
+    ["Stretch", "Health", "10 min"],
+    ["Sleep before 10:30", "Health", "Today"]
   ],
-  Focus: [
-    ["One uninterrupted deep work session.", "Business", "60 min"],
-    ["Silence distractions.", "Purpose", "10 min"],
-    ["Complete today's highest priority.", "Purpose", "60 min"]
+  discipline: [
+    ["Complete one difficult task", "Discipline", "60 min"],
+    ["Keep your phone away for one hour", "Focus", "60 min"],
+    ["Wake up on time", "Discipline", "Today"],
+    ["Review tomorrow before bed", "Purpose", "10 min"],
+    ["Finish before you rest", "Discipline", "Today"]
   ],
-  Confidence: [
-    ["Finish something you've been avoiding.", "Confidence", "30 min"],
-    ["Exercise.", "Fitness", "30 min"],
-    ["Journal one lesson learned.", "Learning", "20 min"]
-  ],
-  Recovery: [
-    ["Walk outside.", "Health", "30 min"],
-    ["Drink enough water.", "Health", "Today"],
-    ["Sleep on time.", "Health", "Today"]
+  default: [
+    ["Finish one important task", "Purpose", "60 min"],
+    ["Move your body", "Fitness", "30 min"],
+    ["Reach out to one person", "Relationships", "10 min"],
+    ["Review your money", "Money", "20 min"],
+    ["Plan tomorrow", "Purpose", "10 min"]
   ]
 };
 const evidenceChips = [
@@ -47,7 +49,6 @@ const screenOrder = [
   "build",
   "goal",
   "assessment",
-  "focus",
   "promises",
   "dashboard",
   "session",
@@ -65,8 +66,16 @@ function createBlankPromises() {
   return [1, 2, 3].map((id) => ({ id, title: "", category: "", estimate: "", completed: false }));
 }
 
-function createSuggestedPromises(dayStyle) {
-  const suggestions = promiseSuggestions[dayStyle] || promiseSuggestions.Momentum;
+function getGoalSuggestionKey(builderGoal) {
+  const goal = builderGoal.toLowerCase();
+  if (goal.includes("business") || goal.includes("launch") || goal.includes("company") || goal.includes("sales")) return "business";
+  if (goal.includes("lose") || goal.includes("weight") || goal.includes("fitness") || goal.includes("pound") || goal.includes("health")) return "fitness";
+  if (goal.includes("discipline") || goal.includes("consistent") || goal.includes("focus")) return "discipline";
+  return "default";
+}
+
+function createSuggestedPromises(builderGoal) {
+  const suggestions = goalSuggestionGroups[getGoalSuggestionKey(builderGoal || "")];
   return suggestions.map(([title, category, estimate]) => ({
     title,
     category,
@@ -74,9 +83,9 @@ function createSuggestedPromises(dayStyle) {
   }));
 }
 
-function applySuggestionToPromises(promises, suggestion) {
+function applySuggestionToPromises(promises, suggestion, promiseId) {
   const next = promises.length ? [...promises] : createBlankPromises();
-  const targetIndex = next.findIndex((promise) => !promise.title.trim());
+  const targetIndex = promiseId ? next.findIndex((promise) => promise.id === promiseId) : next.findIndex((promise) => !promise.title.trim());
   const index = targetIndex === -1 ? 0 : targetIndex;
   next[index] = {
     ...next[index],
@@ -88,16 +97,16 @@ function applySuggestionToPromises(promises, suggestion) {
   return next;
 }
 
-function createTomorrowSuggestions(dayStyle) {
-  return createSuggestedPromises(dayStyle).map((suggestion, index) => ({
+function createTomorrowSuggestions(builderGoal) {
+  return createSuggestedPromises(builderGoal).slice(0, 3).map((suggestion, index) => ({
     id: index + 1,
     ...suggestion,
     completed: false
   }));
 }
 
-function getDaySuggestions(dayStyle) {
-  return createSuggestedPromises(dayStyle || "Momentum");
+function getDaySuggestions(builderGoal) {
+  return createSuggestedPromises(builderGoal);
 }
 
 function getTrustLabel(score) {
@@ -145,6 +154,59 @@ function getGreeting(name, completedCount) {
   return { greeting: `${greeting}, ${displayName}`, status };
 }
 
+function getEntryDateKey(entry) {
+  return entry.completionTimestamp ? getLocalDateKey(new Date(entry.completionTimestamp)) : entry.date;
+}
+
+function getJourneyDays(evidenceEntries) {
+  return evidenceEntries.reduce((days, entry) => {
+    const key = getEntryDateKey(entry);
+    const existing = days[key] || {
+      dateKey: key,
+      date: entry.date,
+      builderGoal: entry.builderGoal,
+      promises: [],
+      reflections: [],
+      completionTime: entry.time,
+      completionRate: entry.completionRate || "1/3"
+    };
+    const completedCount = Math.max(existing.promises.length + 1, Number.parseInt(entry.completionRate, 10) || 1);
+    days[key] = {
+      ...existing,
+      builderGoal: entry.builderGoal || existing.builderGoal,
+      promises: [...existing.promises, entry.promiseTitle],
+      reflections: entry.reflection ? [...existing.reflections, entry.reflection] : existing.reflections,
+      completionTime: entry.time || existing.completionTime,
+      completionRate: `${Math.min(completedCount, 3)}/3`
+    };
+    return days;
+  }, {});
+}
+
+function getCalendarDays(evidenceEntries, date = new Date()) {
+  const journeyDays = getJourneyDays(evidenceEntries);
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const leadingBlanks = firstDay.getDay();
+  const days = Array.from({ length: leadingBlanks }, () => null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const current = new Date(year, month, day);
+    const dateKey = getLocalDateKey(current);
+    const entry = journeyDays[dateKey];
+    const completed = entry ? Math.min(entry.promises.length, 3) : 0;
+    days.push({ day, dateKey, completed, entry });
+  }
+  return days;
+}
+
+function getCompletionMark(completed) {
+  if (completed >= 3) return "●";
+  if (completed > 0) return "◐";
+  return "○";
+}
+
 function normalizePromises(promises) {
   return promises.map((promise) => ({
     completed: false,
@@ -160,7 +222,6 @@ function getInitialState() {
     userName: "",
     builderSince: getBuilderSinceLabel(),
     builderGoal: "",
-    dayStyle: "",
     selectedAreas: [],
     trustScore: 5,
     promises: [],
@@ -201,10 +262,9 @@ function getInitialState() {
     if (!isNewDay) return resumedState;
     return {
       ...resumedState,
-      screen: saved.userName && saved.builderGoal ? "focus" : resumedState.screen,
+      screen: saved.userName && saved.builderGoal ? "promises" : resumedState.screen,
       promises: movedPromises,
       tomorrowsPromises: [],
-      dayStyle: "",
       activePromiseId: null,
       sessionReturnScreen: "promises",
       selectedEvidenceChips: [],
@@ -226,7 +286,6 @@ function App() {
   const [builderGoal, setBuilderGoal] = useState(initialState.builderGoal);
   const [builderGoalDraft, setBuilderGoalDraft] = useState(initialState.builderGoal);
   const [builderGoalError, setBuilderGoalError] = useState("");
-  const [dayStyle, setDayStyle] = useState(initialState.dayStyle);
   const [nameDraft, setNameDraft] = useState(initialState.userName);
   const [nameError, setNameError] = useState("");
   const [selectedAreas, setSelectedAreas] = useState(initialState.selectedAreas);
@@ -249,6 +308,8 @@ function App() {
   const [lastActiveDate, setLastActiveDate] = useState(initialState.lastActiveDate);
   const [hasSeenDashboard, setHasSeenDashboard] = useState(initialState.hasSeenDashboard);
   const [promiseMessage, setPromiseMessage] = useState("");
+  const [suggestionPromiseId, setSuggestionPromiseId] = useState(null);
+  const [journeySelectedDate, setJourneySelectedDate] = useState(getLocalDateKey());
 
   const activePromise = promises.find((promise) => promise.id === activePromiseId) || promises[0];
   const dailyPromisesKept = promises.filter((promise) => promise.completed).length;
@@ -268,7 +329,6 @@ function App() {
       userName,
       builderSince,
       builderGoal,
-      dayStyle,
       selectedAreas,
       trustScore,
       promises,
@@ -293,7 +353,6 @@ function App() {
     userName,
     builderSince,
     builderGoal,
-    dayStyle,
     selectedAreas,
     trustScore,
     promises,
@@ -344,11 +403,7 @@ function App() {
 
   function goToScreen(nextScreen) {
     if (nextScreen === "promises" && promises.length === 0) {
-      if (!dayStyle) {
-        nextScreen = "focus";
-      } else {
-        setPromises(createBlankPromises());
-      }
+      setPromises(createBlankPromises());
     }
     setTransition((current) => ({
       key: current.key + 1,
@@ -364,8 +419,7 @@ function App() {
       build: "name",
       goal: "build",
       assessment: "goal",
-      focus: "assessment",
-      promises: hasSeenDashboard ? "dashboard" : "focus",
+      promises: hasSeenDashboard ? "dashboard" : "assessment",
       dashboard: "promises",
       session: sessionReturnScreen,
       success: "session",
@@ -388,9 +442,8 @@ function App() {
     if (screen === "name") return submitName();
     if (screen === "build") return goToScreen("goal") || true;
     if (screen === "goal") return submitBuilderGoal();
-    if (screen === "assessment") return goToScreen("focus") || true;
+    if (screen === "assessment") return goToScreen("promises") || true;
     if (screen === "dashboard") return goToScreen("promises") || true;
-    if (screen === "focus" && dayStyle) return prepareTodayFromStyle(dayStyle);
     if (screen === "promises") return validatePromiseSet();
     if (screen === "session" && !sessionStarted) return setSessionStarted(true) || true;
     return false;
@@ -420,8 +473,7 @@ function App() {
     return true;
   }
 
-  function prepareTodayFromStyle(style) {
-    setDayStyle(style);
+  function prepareToday() {
     if (promises.length === 0) {
       setPromises(createBlankPromises());
     }
@@ -456,7 +508,8 @@ function App() {
 
   function usePromiseSuggestion(suggestion) {
     setPromiseMessage("");
-    setPromises((current) => applySuggestionToPromises(current, suggestion));
+    setPromises((current) => applySuggestionToPromises(current, suggestion, suggestionPromiseId));
+    setSuggestionPromiseId(null);
   }
 
   function validatePromiseSet() {
@@ -521,13 +574,11 @@ function App() {
       reflection: evidenceReflection.trim(),
       selectedEvidenceChips,
       builderGoal,
-      dayStyle,
       completionRate: `${completedAfterSave}/3`,
       completionTimestamp
     };
     const coachEntry = {
       builderGoal,
-      dayStyle,
       promise: evidenceEntry.promiseTitle,
       reflection: evidenceEntry.reflection,
       evidenceChips: evidenceEntry.selectedEvidenceChips,
@@ -550,7 +601,7 @@ function App() {
 
   function prepareTomorrow() {
     if (tomorrowsPromises.length === 0) {
-      setTomorrowsPromises(dayStyle ? createTomorrowSuggestions(dayStyle) : createBlankPromises());
+      setTomorrowsPromises(createTomorrowSuggestions(builderGoal));
     }
     goToScreen("tomorrow");
     return true;
@@ -573,7 +624,6 @@ function App() {
     setBuilderGoal("");
     setBuilderGoalDraft("");
     setBuilderGoalError("");
-    setDayStyle("");
     setNameDraft("");
     setSelectedAreas([]);
     setTrustScore(5);
@@ -649,20 +699,13 @@ function App() {
             ...navigationProps,
             trustScore,
             onScoreChange: setTrustScore,
-            onContinue: () => goToScreen("focus")
-          }),
-        screen === "focus" &&
-          h(DayStyleScreen, {
-            ...navigationProps,
-            dayStyle,
-            onChooseStyle: prepareTodayFromStyle
+            onContinue: () => goToScreen("promises")
           }),
         screen === "dashboard" &&
           h(DashboardScreen, {
             ...navigationProps,
             greeting,
             builderGoal,
-            dayStyle,
             trustScore,
             selfTrustLabel,
             builderScore,
@@ -674,7 +717,11 @@ function App() {
             onSelectPromise: (promiseId) => startSelectedPromise(promiseId, "dashboard"),
             onBeginToday: () => {
               if (dailyPromisesKept === 3) return goToScreen("complete");
-              return dayStyle ? goToScreen("promises") : goToScreen("focus");
+              return goToScreen("promises");
+            },
+            onSelectJourneyDate: (dateKey) => {
+              setJourneySelectedDate(dateKey);
+              goToScreen("timeline");
             },
             onReset: resetPrototype
           }),
@@ -682,12 +729,15 @@ function App() {
           h(PromisesScreen, {
             ...navigationProps,
             promises,
-            suggestions: getDaySuggestions(dayStyle),
+            suggestions: getDaySuggestions(builderGoal),
             message: promiseMessage,
             isLocked: isPromiseSetValid,
             hasSeenDashboard,
             dailyPromisesKept,
-            dayStyle,
+            builderGoal,
+            suggestionPromiseId,
+            onOpenSuggestions: setSuggestionPromiseId,
+            onCloseSuggestions: () => setSuggestionPromiseId(null),
             onUpdatePromise: updatePromise,
             onUseSuggestion: usePromiseSuggestion,
             onValidatePromises: validatePromiseSet,
@@ -724,7 +774,6 @@ function App() {
             evidenceCount,
             promisesKept: dailyPromisesKept,
             builderGoal,
-            dayStyle,
             closingReflection,
             onReflectionChange: setClosingReflection,
             onPrepareTomorrow: prepareTomorrow,
@@ -734,18 +783,17 @@ function App() {
           h(TomorrowPromisesScreen, {
             ...navigationProps,
             promises: tomorrowsPromises,
-            dayStyle,
             onUpdatePromise: updateTomorrowPromise,
             onDone: finishTomorrowPlanning
           }),
         screen === "timeline" &&
           h(EvidenceTimelineScreen, {
             ...navigationProps,
-            evidenceCount,
             promisesKept,
-            currentStreak,
             builderGoal,
-            evidenceEntries
+            evidenceEntries,
+            selectedDate: journeySelectedDate,
+            onSelectDate: setJourneySelectedDate
           }),
         screen === "profile" &&
           h(ProfileScreen, {
@@ -814,7 +862,7 @@ function Screen({ eyebrow = "VERAKAI", step, onBack, withBottomNav = false, chil
         h("p", { className: "text-[0.72rem] font-semibold tracking-[0.34em] text-white" }, eyebrow)
       ),
       step
-        ? h("p", { key: step, className: "progress-indicator text-[0.68rem] font-medium uppercase tracking-[0.18em] text-white/38" }, `Step ${step} of 11`)
+        ? h("p", { key: step, className: "progress-indicator text-[0.68rem] font-medium uppercase tracking-[0.18em] text-white/38" }, `Step ${step} of 5`)
         : h("span", { className: "h-2 w-2 rounded-full bg-midnight-300 shadow-[0_0_24px_rgba(111,147,200,0.85)]" })
     ),
     children,
@@ -888,7 +936,7 @@ function PromiseRow({ promise, checked = false, onClick }) {
       h("span", { className: "block text-sm font-medium leading-5" }, promise.title || "Untitled promise"),
       h("span", { className: "mt-1 block text-xs text-white/35" }, `${promise.category} / ${promise.estimate}`)
     ),
-    checked && h("span", { className: "ml-auto shrink-0 text-[0.64rem] font-semibold uppercase tracking-[0.14em] text-midnight-300" }, "Evidence Added")
+    checked && h("span", { className: "ml-auto shrink-0 text-[0.64rem] font-semibold uppercase tracking-[0.14em] text-midnight-300" }, "Journey Added")
   );
 }
 
@@ -1056,30 +1104,6 @@ function AssessmentScreen({ trustScore, onScoreChange, onContinue, onBack }) {
   );
 }
 
-function DayStyleScreen({ dayStyle, onChooseStyle, onBack }) {
-  return h(
-    Screen,
-    { step: 6, onBack },
-    h(SectionIntro, {
-      label: "Today",
-      title: "What kind of Builder do you need to be today?",
-      copy: "We'll help you build today's plan."
-    }),
-    h(
-      "div",
-      { className: "mt-10 grid grid-cols-2 gap-3" },
-      dayStyleOptions.map((style) =>
-        h(SelectableCard, {
-          key: style,
-          label: style,
-          selected: dayStyle === style,
-          onClick: () => onChooseStyle(style)
-        })
-      )
-    )
-  );
-}
-
 function getHomeActionLabel(completedCount) {
   if (completedCount === 0) return "Begin Today";
   if (completedCount === 1) return "Continue Today";
@@ -1087,7 +1111,56 @@ function getHomeActionLabel(completedCount) {
   return "Review Today";
 }
 
-function DashboardScreen({ greeting, builderGoal, dayStyle, trustScore, selfTrustLabel, builderScore, currentStreak, evidenceCount, dailyPromisesKept, promises, evidenceEntries, onSelectPromise, onBeginToday, onReset, onBack }) {
+function BuilderCalendar({ evidenceEntries, selectedDate, onSelectDate, compact = false }) {
+  const today = new Date();
+  const days = getCalendarDays(evidenceEntries, today);
+  const monthLabel = today.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const selectedKey = selectedDate || getLocalDateKey(today);
+
+  return h(
+    "div",
+    { className: `builder-calendar ${compact ? "compact" : ""}` },
+    h(
+      "div",
+      { className: "flex items-center justify-between gap-4" },
+      h("p", { className: "text-xs font-semibold uppercase tracking-[0.18em] text-white/35" }, monthLabel),
+      h(
+        "div",
+        { className: "flex items-center gap-2 text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-white/32" },
+        h("span", null, "○"),
+        h("span", null, "◐"),
+        h("span", null, "●")
+      )
+    ),
+    h(
+      "div",
+      { className: "mt-4 grid grid-cols-7 gap-1 text-center text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-white/28" },
+      ["S", "M", "T", "W", "T", "F", "S"].map((day, index) => h("span", { key: `${day}-${index}` }, day))
+    ),
+    h(
+      "div",
+      { className: "mt-2 grid grid-cols-7 gap-1" },
+      days.map((day, index) =>
+        day
+          ? h(
+              "button",
+              {
+                key: day.dateKey,
+                className: `calendar-day ${day.dateKey === selectedKey ? "selected" : ""}`,
+                type: "button",
+                onClick: () => onSelectDate(day.dateKey),
+                "aria-label": `${day.dateKey}: ${day.completed} of 3 promises completed`
+              },
+              h("span", { className: "calendar-number" }, day.day),
+              h("span", { className: `calendar-mark complete-${day.completed}` }, getCompletionMark(day.completed))
+            )
+          : h("span", { key: `blank-${index}`, className: "calendar-day blank" })
+      )
+    )
+  );
+}
+
+function DashboardScreen({ greeting, builderGoal, trustScore, selfTrustLabel, builderScore, currentStreak, evidenceCount, dailyPromisesKept, promises, evidenceEntries, onSelectPromise, onBeginToday, onSelectJourneyDate, onReset, onBack }) {
   const isComplete = dailyPromisesKept === 3;
   const homeActionLabel = getHomeActionLabel(dailyPromisesKept);
   const missionLabel = isComplete ? "Mission Complete" : "Today's Mission";
@@ -1095,7 +1168,7 @@ function DashboardScreen({ greeting, builderGoal, dayStyle, trustScore, selfTrus
 
   return h(
     Screen,
-    { step: 8, onBack, withBottomNav: true },
+    { onBack, withBottomNav: true },
     h(
       "div",
       { className: "home-hero flex flex-col pt-10" },
@@ -1106,8 +1179,7 @@ function DashboardScreen({ greeting, builderGoal, dayStyle, trustScore, selfTrus
         "div",
         { className: "mt-12 rounded-lg border border-white/10 bg-white/[0.035] p-6" },
         h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, missionLabel),
-        h("p", { className: "mt-4 text-[1.36rem] font-semibold leading-8 tracking-[-0.02em] text-white" }, builderGoal || "Set your Builder Goal."),
-        dayStyle && h("p", { className: "mt-5 text-sm font-medium text-midnight-300" }, dayStyle)
+        h("p", { className: "mt-4 text-[1.36rem] font-semibold leading-8 tracking-[-0.02em] text-white" }, builderGoal || "Set your Builder Goal.")
       ),
       h(
         "div",
@@ -1120,7 +1192,8 @@ function DashboardScreen({ greeting, builderGoal, dayStyle, trustScore, selfTrus
         h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Today's Progress"),
         h("p", { className: "mt-3 text-4xl font-semibold tracking-[-0.04em] text-white" }, `${dailyPromisesKept}/3`),
         isComplete && h("p", { className: "mt-2 text-sm font-semibold text-midnight-300" }, "Promises Kept")
-      )
+      ),
+      h(BuilderCalendar, { evidenceEntries, compact: true, onSelectDate: onSelectJourneyDate })
     ),
     h(
       "div",
@@ -1150,16 +1223,16 @@ function DashboardScreen({ greeting, builderGoal, dayStyle, trustScore, selfTrus
           h(StatCard, { label: "Promises Kept", value: `${dailyPromisesKept}/3` }),
           h(StatCard, { label: "Builder Score", value: builderScore }),
           h(StatCard, { label: "Current Streak", value: currentStreak }),
-          h(StatCard, { label: "Evidence Collected", value: evidenceCount })
+          h(StatCard, { label: "Journey Entries", value: evidenceCount })
         )
       ),
       h(
         "section",
         null,
-        h("h2", { className: "text-sm font-semibold uppercase tracking-[0.16em] text-white/45" }, "Recent Evidence"),
+        h("h2", { className: "text-sm font-semibold uppercase tracking-[0.16em] text-white/45" }, "Recent Journey"),
         recentEvidence.length
           ? h("div", { className: "mt-3 grid gap-3" }, recentEvidence.map((entry) => h(EvidenceEntryCard, { key: entry.id, entry })))
-          : h(EmptyState, { title: "No evidence yet.", copy: "Keep one promise to begin the record." })
+          : h(EmptyState, { title: "No Journey entries yet.", copy: "Keep one promise to begin the record." })
       )
     ),
     h("button", { className: "mt-6 text-left text-xs font-semibold text-white/30 transition hover:text-white/50", type: "button", onClick: onReset }, "Reset Prototype")
@@ -1173,7 +1246,10 @@ function PromisesScreen({
   isLocked,
   hasSeenDashboard,
   dailyPromisesKept,
-  dayStyle,
+  builderGoal,
+  suggestionPromiseId,
+  onOpenSuggestions,
+  onCloseSuggestions,
   onUpdatePromise,
   onUseSuggestion,
   onValidatePromises,
@@ -1184,11 +1260,11 @@ function PromisesScreen({
 
   return h(
     Screen,
-    { step: 7, onBack, withBottomNav: true },
+    { onBack, withBottomNav: true },
     h(SectionIntro, {
       label: "Today",
       title: isChoosingPromise ? "Choose today's promise." : "Today's Promises",
-      copy: isChoosingPromise ? "Select one. Enter Focus Mode." : dayStyle ? `Starting points for ${dayStyle}. Edit anything until the promises are yours.` : "Choose a Builder style first."
+      copy: isChoosingPromise ? "Select one. Enter Focus Mode." : "Choose three promises for today."
     }),
     isChoosingPromise &&
       h(
@@ -1211,53 +1287,29 @@ function PromisesScreen({
           h("p", { className: "mt-2 text-2xl font-semibold tracking-[-0.03em] text-white" }, `${dailyPromisesKept}/3`)
         )
       ),
-    !isChoosingPromise &&
-      h(
-        React.Fragment,
-        null,
-        h(
-          "div",
-          { className: "mt-7 rounded-lg border border-white/10 bg-white/[0.035] p-4" },
-          h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Today's Style"),
-          h("p", { className: "mt-2 text-lg font-semibold text-white/84" }, dayStyle || "Choose a style")
-        ),
-        dayStyle &&
-          h(
-            "div",
-            { className: "mt-5 rounded-lg border border-white/10 bg-white/[0.035] p-4" },
-            h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Guided suggestions"),
-            h(
-              "div",
-              { className: "mt-4 grid gap-2" },
-              suggestions.map((suggestion) =>
-                h(
-                  "button",
-                  {
-                    key: suggestion.title,
-                    className: "suggestion-button card-press",
-                    type: "button",
-                    onClick: () => onUseSuggestion(suggestion)
-                  },
-                  h("span", { className: "block text-sm font-semibold text-white/84" }, suggestion.title),
-                  h("span", { className: "mt-1 block text-xs text-white/38" }, `${suggestion.category} / ${suggestion.estimate}`)
-                )
-              )
-            )
-          )
-      ),
     h(
       "div",
       { className: `${isChoosingPromise ? "hidden" : "mt-5 grid gap-3"}` },
       promises.map((promise, index) =>
         h(
           "div",
-          { key: promise.id, className: `promise-card rounded-lg border border-white/10 bg-white/[0.035] p-3 ${promise.completed ? "completed" : ""}` },
+          {
+            key: promise.id,
+            className: `promise-card rounded-lg border border-white/10 bg-white/[0.035] p-3 ${promise.completed ? "completed" : ""}`,
+            onClick: () => {
+              if (!promise.title.trim()) onOpenSuggestions(promise.id);
+            }
+          },
           h("label", { className: "mb-2 block text-xs uppercase tracking-[0.16em] text-white/30", htmlFor: `promise-${promise.id}` }, `Promise ${index + 1}`),
           h("input", {
             id: `promise-${promise.id}`,
             className: "promise-input",
             value: promise.title,
-            placeholder: "Write a clear promise",
+            placeholder: "Tap for suggestions or write your own",
+            onFocus: () => {
+              if (!promise.title.trim()) onOpenSuggestions(promise.id);
+            },
+            onClick: (event) => event.stopPropagation(),
             onChange: (event) => onUpdatePromise(promise.id, "title", event.target.value),
             "aria-label": `Promise ${index + 1}`
           }),
@@ -1277,8 +1329,20 @@ function PromisesScreen({
               onChange: (value) => onUpdatePromise(promise.id, "estimate", value)
             })
           ),
-          promise.completed && h("p", { className: "mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-midnight-300" }, "Evidence Added"),
-          !promise.completed && h("p", { className: "mt-3 text-xs leading-5 text-white/35" }, "Fill every field before beginning.")
+          promise.completed && h("p", { className: "mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-midnight-300" }, "Journey Added"),
+          !promise.completed &&
+            h(
+              "button",
+              {
+                className: "mt-3 text-left text-xs font-semibold text-midnight-300",
+                type: "button",
+                onClick: (event) => {
+                  event.stopPropagation();
+                  onOpenSuggestions(promise.id);
+                }
+              },
+              "Suggested for your Builder Goal"
+            )
         )
       )
     ),
@@ -1289,7 +1353,46 @@ function PromisesScreen({
         isLocked && h("p", { className: "text-center text-xs font-medium uppercase tracking-[0.16em] text-midnight-300" }, "Today's commitments are locked."),
         message && h("p", { className: "text-center text-xs font-medium leading-5 text-white/42" }, message),
         h(PrimaryButton, { onClick: onValidatePromises }, "Continue to Dashboard")
-      )
+      ),
+    suggestionPromiseId &&
+      h(PromiseSuggestionSheet, {
+        builderGoal,
+        suggestions,
+        onUseSuggestion,
+        onClose: onCloseSuggestions
+      })
+  );
+}
+
+function PromiseSuggestionSheet({ builderGoal, suggestions, onUseSuggestion, onClose }) {
+  return h(
+    "div",
+    { className: "bottom-sheet-backdrop", role: "presentation", onClick: onClose },
+    h(
+      "div",
+      { className: "bottom-sheet", role: "dialog", "aria-modal": "true", onClick: (event) => event.stopPropagation() },
+      h("div", { className: "mx-auto h-1 w-10 rounded-full bg-white/18" }),
+      h("p", { className: "mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-white/35" }, "Suggested for your Builder Goal"),
+      h("h2", { className: "mt-3 text-xl font-semibold leading-7 text-white" }, builderGoal || "Today's goal"),
+      h(
+        "div",
+        { className: "mt-5 grid gap-2" },
+        suggestions.map((suggestion) =>
+          h(
+            "button",
+            {
+              key: suggestion.title,
+              className: "suggestion-button card-press",
+              type: "button",
+              onClick: () => onUseSuggestion(suggestion)
+            },
+            h("span", { className: "block text-sm font-semibold text-white/84" }, suggestion.title),
+            h("span", { className: "mt-1 block text-xs text-white/38" }, `${suggestion.category} / ${suggestion.estimate}`)
+          )
+        )
+      ),
+      h("button", { className: "mt-5 w-full text-sm font-semibold text-white/42", type: "button", onClick: onClose }, "Ignore suggestions")
+    )
   );
 }
 
@@ -1324,7 +1427,7 @@ function SelectControl({ label, value, options, onChange }) {
 function PromiseSessionScreen({ promise, onComplete, onExitFocus, onBack }) {
   return h(
     Screen,
-    { step: 9, onBack },
+    { onBack },
     h(
       "div",
       { className: "focus-mode flex flex-1 flex-col justify-center py-12" },
@@ -1345,7 +1448,7 @@ function PromiseSessionScreen({ promise, onComplete, onExitFocus, onBack }) {
 function PromiseKeptScreen({ onBack }) {
   return h(
     Screen,
-    { step: 10, onBack },
+    { onBack },
     h(
       "div",
       { className: "success-state flex flex-1 flex-col items-center justify-center text-center" },
@@ -1358,11 +1461,11 @@ function PromiseKeptScreen({ onBack }) {
 function EvidenceScreen({ selectedChips, reflection, onToggleChip, onReflectionChange, onSaveEvidence, onBack }) {
   return h(
     Screen,
-    { step: 10, onBack },
+    { onBack },
     h(
       "div",
       { className: "pt-12" },
-      h("p", { className: "mb-4 text-xs font-medium uppercase tracking-[0.22em] text-midnight-300" }, "Evidence Added"),
+      h("p", { className: "mb-4 text-xs font-medium uppercase tracking-[0.22em] text-midnight-300" }, "Journey Entry"),
       h("h1", { className: "headline-enter text-[2.22rem] font-semibold leading-[1.03] tracking-[-0.02em]" }, "You kept your word."),
       h(
         "p",
@@ -1393,12 +1496,12 @@ function EvidenceScreen({ selectedChips, reflection, onToggleChip, onReflectionC
       h("textarea", {
         className: "journal-field mt-5",
         rows: 6,
-        placeholder: "Write your evidence...",
+        placeholder: "Write what this proved...",
         value: reflection,
         onChange: (event) => onReflectionChange(event.target.value)
       })
     ),
-    h("div", { className: "mt-auto pt-8" }, h(PrimaryButton, { onClick: onSaveEvidence }, "Save Evidence"))
+    h("div", { className: "mt-auto pt-8" }, h(PrimaryButton, { onClick: onSaveEvidence }, "Save to Journey"))
   );
 }
 
@@ -1408,9 +1511,7 @@ function PrepareTomorrowScreen({
   selfTrustLabel,
   builderScore,
   currentStreak,
-  evidenceCount,
   builderGoal,
-  dayStyle,
   closingReflection,
   onReflectionChange,
   onPrepareTomorrow,
@@ -1419,7 +1520,7 @@ function PrepareTomorrowScreen({
 }) {
   return h(
     Screen,
-    { step: 11, onBack },
+    { onBack },
     h(
       "div",
       { className: "pt-12" },
@@ -1429,9 +1530,8 @@ function PrepareTomorrowScreen({
         "div",
         { className: "mt-8 grid grid-cols-2 gap-3" },
         h(StatCard, { label: "Today's Goal", value: builderGoal || "Unset", hero: true }),
-        h(StatCard, { label: "Today's Style", value: dayStyle || "Unset" }),
         h(StatCard, { label: "Promises Completed", value: `${promisesKept}/3` }),
-        h(StatCard, { label: "Evidence Created", value: promisesKept }),
+        h(StatCard, { label: "Journey Entries", value: promisesKept }),
         h(StatCard, { label: "Builder Score", value: builderScore }),
         h(StatCard, { label: "Self-Trust", value: trustScore, detail: selfTrustLabel }),
         h(StatCard, { label: "Current Streak", value: currentStreak })
@@ -1445,37 +1545,29 @@ function PrepareTomorrowScreen({
           id: "closingReflection",
           className: "journal-field mt-4",
           rows: 4,
-          placeholder: "Write the evidence you want to remember...",
+          placeholder: "Write what you want to remember...",
           value: closingReflection,
           onChange: (event) => onReflectionChange(event.target.value)
-        }),
-        h("p", { className: "mt-5 text-sm font-medium leading-6 text-white/48" }, "Would you like to prepare tomorrow?")
+        })
       )
     ),
     h(
       "div",
       { className: "mt-auto grid gap-3 pt-8" },
-      h(PrimaryButton, { onClick: onPrepareTomorrow }, "Prepare Tomorrow"),
-      h(SecondaryButton, { onClick: onSkip }, "Skip")
+      h(PrimaryButton, { onClick: onSkip }, "Return Home")
     )
   );
 }
 
-function TomorrowPromisesScreen({ promises, dayStyle, onUpdatePromise, onDone, onBack }) {
+function TomorrowPromisesScreen({ promises, onUpdatePromise, onDone, onBack }) {
   return h(
     Screen,
-    { step: 11, onBack },
+    { onBack },
     h(SectionIntro, {
       label: "Tomorrow",
       title: "Prepare tomorrow.",
       copy: "These promises are locked until tomorrow. You cannot complete them today."
     }),
-    h(
-      "div",
-      { className: "mt-7 rounded-lg border border-white/10 bg-white/[0.035] p-4" },
-      h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Tomorrow's Style"),
-      h("p", { className: "mt-2 text-lg font-semibold text-white/84" }, dayStyle || "Not selected")
-    ),
     h(
       "div",
       { className: "mt-5 grid gap-3" },
@@ -1516,22 +1608,35 @@ function TomorrowPromisesScreen({ promises, dayStyle, onUpdatePromise, onDone, o
   );
 }
 
-function EvidenceTimelineScreen({ evidenceEntries, onBack }) {
+function EvidenceTimelineScreen({ promisesKept, builderGoal, evidenceEntries, selectedDate, onSelectDate, onBack }) {
+  const journeyDays = getJourneyDays(evidenceEntries);
+  const selectedDay = journeyDays[selectedDate];
+  const entriesForSelectedDate = evidenceEntries.filter((entry) => getEntryDateKey(entry) === selectedDate);
+
   return h(
     Screen,
     { onBack, withBottomNav: true },
     h(SectionIntro, {
-      label: "Evidence",
-      title: "Evidence",
+      label: "Journey",
+      title: "Journey",
       copy: "A record of promises kept."
     }),
     h(
       "div",
-      { className: "mt-10 grid gap-5" },
-      evidenceEntries.length
-        ? evidenceEntries.map((entry) => h(EvidenceEntryCard, { key: entry.id, entry }))
-        : h(EmptyState, { title: "No evidence yet.", copy: "Keep your first promise to begin the record." })
-    ),
+      { className: "mt-8 grid gap-8" },
+      h(BuilderCalendar, { evidenceEntries, selectedDate, onSelectDate }),
+      h(
+        "section",
+        null,
+        h("div", { className: "flex items-end justify-between gap-4" },
+          h("h2", { className: "text-sm font-semibold uppercase tracking-[0.16em] text-white/45" }, selectedDay ? selectedDay.date : "Daily Entries"),
+          h("p", { className: "text-xs font-semibold uppercase tracking-[0.14em] text-white/32" }, `${promisesKept} lifetime`)
+        ),
+        entriesForSelectedDate.length
+          ? h("div", { className: "mt-4 grid gap-5" }, entriesForSelectedDate.map((entry) => h(EvidenceEntryCard, { key: entry.id, entry })))
+          : h(EmptyState, { title: "No Journey entry.", copy: builderGoal ? "Keep a promise to add this day to your Journey." : "Set a Builder Goal to begin." })
+      )
+    )
   );
 }
 
@@ -1539,7 +1644,7 @@ function EvidenceEntryCard({ entry }) {
   return h(
     "article",
     { className: "evidence-entry rounded-lg border border-white/10 bg-white/[0.035] p-6" },
-    h("p", { className: "text-[1.05rem] font-medium leading-7 text-white/78" }, entry.reflection || "Evidence saved. You kept the promise."),
+    h("p", { className: "text-[1.05rem] font-medium leading-7 text-white/78" }, entry.reflection || "You kept the promise."),
     h("h2", { className: "mt-5 text-sm font-semibold leading-6 text-white/88" }, entry.promiseTitle),
     entry.selectedEvidenceChips?.length
       ? h(
@@ -1553,11 +1658,11 @@ function EvidenceEntryCard({ entry }) {
       { className: "mt-6 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/35" },
       h("span", null, `${entry.date}${entry.time ? ` / ${entry.time}` : ""}`),
       h("span", null, "/"),
-      entry.dayStyle && h("span", null, entry.dayStyle),
-      entry.dayStyle && h("span", null, "/"),
       h("span", null, entry.category || "Uncategorized"),
       h("span", null, "/"),
-      h("span", null, entry.estimatedTime || "No estimate")
+      h("span", null, entry.estimatedTime || "No estimate"),
+      h("span", null, "/"),
+      h("span", null, entry.completionRate || "1/3")
     ),
     entry.builderGoal && h("p", { className: "mt-4 text-xs leading-5 text-white/35" }, `Building toward: ${entry.builderGoal}`)
   );
@@ -1595,7 +1700,7 @@ function ProfileScreen({ userName, builderSince, builderGoal, identityLabel, evi
       h(ProfileStoryRow, { label: "Current Goal", value: builderGoal || "No Builder Goal" }),
       h(ProfileStoryRow, { label: "Current Streak", value: `${currentStreak} ${currentStreak === 1 ? "day" : "days"}` }),
       h(ProfileStoryRow, { label: "Lifetime Promises", value: promisesKept }),
-      h(ProfileStoryRow, { label: "Evidence Collected", value: evidenceCount })
+      h(ProfileStoryRow, { label: "Journey Entries", value: evidenceCount })
     )
   );
 }
@@ -1655,7 +1760,7 @@ function SettingsScreen({ nameDraft, nameError, onNameChange, onSaveName, onRese
 function BottomNav({ activeScreen, onNavigate }) {
   const items = [
     { id: "dashboard", icon: "🏠", label: "Home" },
-    { id: "timeline", icon: "📖", label: "Evidence" },
+    { id: "timeline", icon: "📖", label: "Journey" },
     { id: "profile", icon: "👤", label: "Profile" },
     { id: "settings", icon: "⚙️", label: "Settings" }
   ];
