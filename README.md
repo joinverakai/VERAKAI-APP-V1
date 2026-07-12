@@ -1,34 +1,21 @@
 # VERAKAI Mobile Prototype
 
-A front-end-only React and Tailwind prototype for VERAKAI, a behavioral execution brand focused on rebuilding self-trust through promises kept.
+Front-end React and Tailwind prototype for testing the VERAKAI core journey:
 
-## Screens
+`Onboarding → Builder Goal → Suggested Promises → Dashboard → Focus Session → Evidence → Journey`
 
-- Welcome screen
-- Area selection screen
-- Self-trust assessment screen
-- Simple "Next screen coming soon" placeholder
-
-## Run
-
-Serve the folder locally:
+## Run locally
 
 ```bash
 python3 -m http.server 4173
 ```
 
-Then visit:
-
-```text
-http://localhost:4173
-```
-
-The prototype is static. It has no backend, authentication, database, or API calls.
+Open `http://localhost:4173`.
 
 ## Test
 
-Run the smoke test:
-
 ```bash
-node tests/prototype.test.mjs
+node prototype.test.cjs
 ```
+
+The prototype stores state in the browser with `localStorage`. It does not yet include authentication, a database, or server-side APIs.

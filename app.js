@@ -263,7 +263,7 @@ function getInitialState() {
     return {
       ...resumedState,
       screen: saved.userName && saved.builderGoal ? "promises" : resumedState.screen,
-      promises: movedPromises,
+      promises: movedPromises.length ? movedPromises : createBlankPromises(),
       tomorrowsPromises: [],
       activePromiseId: null,
       sessionReturnScreen: "promises",
@@ -538,9 +538,7 @@ function App() {
   function beginPromise(promiseId = activePromiseId, returnScreen = "promises") {
     if (!promiseId) return false;
     const selectedPromise = promises.find((promise) => promise.id === promiseId);
-    if (selectedPromise?.completed && !window.confirm("You already added evidence for this promise. Start it again?")) {
-      return false;
-    }
+    if (!selectedPromise || selectedPromise.completed) return false;
     setActivePromiseId(promiseId);
     setSessionReturnScreen(returnScreen);
     setSessionStarted(false);
@@ -1398,7 +1396,9 @@ function PromiseChoiceCard({ promise, completed, onClick }) {
     "button",
     {
       type: "button",
-      onClick,
+      onClick: completed ? undefined : onClick,
+      disabled: completed,
+      "aria-disabled": completed,
       className: `promise-choice-card card-press ${completed ? "completed" : ""}`
     },
     h("span", { className: "block text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/32" }, completed ? "Completed" : "Start This Promise"),
