@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "VERAKAI",
+  "short_name": "VERAKAI",
+  "description": "Keep promises to yourself. Build evidence. Rebuild self-trust.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#04070d",
+  "theme_color": "#060a12",
+  "icons": [
+    {
+      "src": "./icons/verakai-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/verakai-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/verakai-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

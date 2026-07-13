@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VERAKAI">
+  <rect width="512" height="512" fill="#04070d"/>
+  <rect x="56" y="56" width="400" height="400" rx="76" fill="#060a12" stroke="#244a78" stroke-width="8"/>
+  <path d="M150 166h62l44 118 44-118h62L256 362z" fill="#6f93c8"/>
+  <circle cx="256" cy="132" r="10" fill="#456fa8"/>
+</svg>

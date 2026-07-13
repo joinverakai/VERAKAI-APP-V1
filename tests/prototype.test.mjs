@@ -2,16 +2,44 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
-const [html, app, styles] = await Promise.all([
+const [html, app, styles, manifestText, serviceWorker, icon192, icon512, iconMaskable, appleIcon] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../app.js", import.meta.url), "utf8"),
-  readFile(new URL("../styles.css", import.meta.url), "utf8")
+  readFile(new URL("../styles.css", import.meta.url), "utf8"),
+  readFile(new URL("../manifest.webmanifest", import.meta.url), "utf8"),
+  readFile(new URL("../service-worker.js", import.meta.url), "utf8"),
+  readFile(new URL("../icons/verakai-192.png", import.meta.url)),
+  readFile(new URL("../icons/verakai-512.png", import.meta.url)),
+  readFile(new URL("../icons/verakai-maskable-512.png", import.meta.url)),
+  readFile(new URL("../icons/apple-touch-icon-180.png", import.meta.url))
 ]);
+
+const manifest = JSON.parse(manifestText);
+assert.equal(manifest.name, "VERAKAI", "Manifest should identify VERAKAI");
+assert.equal(manifest.display, "standalone", "Manifest should enable standalone display");
+assert.equal(manifest.orientation, "portrait-primary", "Manifest should keep the phone orientation focused");
+assert.equal(manifest.icons.length, 3, "Manifest should list the required PWA icons");
+
+function pngSize(buffer) {
+  assert.equal(buffer.subarray(1, 4).toString("ascii"), "PNG", "Icon must be a PNG");
+  return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
+}
+
+assert.deepEqual(pngSize(icon192), [192, 192], "192px icon should have the expected dimensions");
+assert.deepEqual(pngSize(icon512), [512, 512], "512px icon should have the expected dimensions");
+assert.deepEqual(pngSize(iconMaskable), [512, 512], "Maskable icon should have the expected dimensions");
+assert.deepEqual(pngSize(appleIcon), [180, 180], "Apple icon should have the expected dimensions");
 
 assert.ok(html.includes("VERAKAI Prototype"), "HTML title should describe the VERAKAI prototype");
 assert.ok(html.includes("viewport-fit=cover"), "Viewport should support full-screen mobile safe areas");
 assert.ok(html.includes("react.production.min.js"), "React should be loaded for the prototype");
 assert.ok(html.includes("tailwindcss.com"), "Tailwind should be loaded for utility classes");
+assert.ok(html.includes('rel="manifest"'), "HTML should link the PWA manifest");
+assert.ok(html.includes("serviceWorker.register"), "HTML should register a service worker when supported");
+assert.ok(html.includes("isSecureContext"), "Service worker registration should be limited to secure contexts or localhost");
+assert.ok(serviceWorker.includes("networkFirst"), "Navigations should use network-first caching");
+assert.ok(serviceWorker.includes('request.method !== "GET"'), "Service worker should never cache non-GET requests");
+assert.ok(serviceWorker.includes("isPostHogRequest"), "Service worker should explicitly exclude PostHog traffic");
 assert.equal((html.match(/posthog\.init\(/g) || []).length, 1, "PostHog should be initialized exactly once");
 assert.ok(html.includes("autocapture: false"), "PostHog autocapture should be disabled");
 assert.ok(html.includes("maskAllInputs: true"), "Session recordings should mask every input");
@@ -170,7 +198,12 @@ for (const eventName of [
   "dashboard_viewed",
   "journey_viewed",
   "day_completed",
-  "app_error"
+  "app_error",
+  "install_prompt_shown",
+  "install_started",
+  "install_dismissed",
+  "app_installed",
+  "standalone_opened"
 ]) {
   assert.ok(app.includes(`"${eventName}"`), `Analytics should include ${eventName}`);
 }
@@ -179,6 +212,10 @@ assert.ok(app.includes('if (screen !== "dashboard") trackDashboardViewed()'), "D
 assert.ok(app.includes('if (nextScreen === "timeline" && screen !== "timeline") trackJourneyViewed()'), "Journey events should only fire on an actual screen transition");
 assert.ok(app.includes('if (!completedDayEvents.has(completionDay))'), "Day completion should only fire once per completed day");
 assert.ok(app.indexOf('const evidenceEntry = {') < app.indexOf('trackEvent("evidence_saved"'), "Evidence should be assembled before its event is tracked");
+assert.ok(app.includes("installDismissalKey"), "iOS install dismissal should persist locally");
+assert.ok(app.includes("beforeinstallprompt"), "Native install prompts should only be used when supported");
+assert.ok(app.includes("isStandaloneApp"), "Installed mode should be detected before showing install UI");
+assert.ok(app.includes("installEvents.has(eventName)"), "Install analytics should be deduplicated");
 
 assert.ok(styles.includes(".phone-frame"), "Phone frame styles should exist");
 assert.ok(styles.includes(".trust-range"), "Assessment slider styles should exist");

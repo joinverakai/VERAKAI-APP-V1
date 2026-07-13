@@ -2,6 +2,7 @@ const { useEffect, useMemo, useState } = React;
 const h = React.createElement;
 
 const storageKey = "verakai-prototype-state-v5";
+const installDismissalKey = "verakai-ios-install-dismissed-v1";
 const appVersion = "alpha-0.1";
 const analyticsPropertyAllowlist = {
   app_opened: ["returning_user"],
@@ -19,8 +20,29 @@ const analyticsPropertyAllowlist = {
   dashboard_viewed: ["completed_today", "evidence_count"],
   journey_viewed: ["evidence_count", "promises_kept"],
   day_completed: ["completed_count", "goal_category"],
-  app_error: ["screen_name", "error_type"]
+  app_error: ["screen_name", "error_type"],
+  install_prompt_shown: ["platform", "install_method"],
+  install_started: ["platform", "install_method"],
+  install_dismissed: ["platform", "install_method"],
+  app_installed: ["platform", "install_method"],
+  standalone_opened: ["platform", "install_method"]
 };
+
+function isStandaloneApp() {
+  return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function getInstallPlatform() {
+  const userAgent = window.navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/.test(userAgent) || (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1)) return "ios";
+  if (/Android/.test(userAgent)) return "android";
+  return "desktop";
+}
+
+function isIosSafari() {
+  const userAgent = window.navigator.userAgent || "";
+  return getInstallPlatform() === "ios" && /Safari/.test(userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(userAgent);
+}
 
 function trackEvent(eventName, properties = {}) {
   try {
@@ -373,6 +395,11 @@ function App() {
       return false;
     }
   });
+  const [isStandalone, setIsStandalone] = useState(isStandaloneApp);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const [iosInstallDismissed, setIosInstallDismissed] = useState(() => window.localStorage.getItem(installDismissalKey) === "true");
+  const [showIosInstallInstructions, setShowIosInstallInstructions] = useState(false);
+  const installEvents = useMemo(() => new Set(), []);
   const [screen, setScreen] = useState(initialState.screen);
   const [transition, setTransition] = useState({ key: 0, direction: "forward" });
   const [userName, setUserName] = useState(initialState.userName);
@@ -478,6 +505,33 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const platform = getInstallPlatform();
+    const trackInstallOnce = (eventName, properties) => {
+      if (installEvents.has(eventName)) return;
+      installEvents.add(eventName);
+      trackEvent(eventName, properties);
+    };
+    const onBeforeInstallPrompt = (event) => {
+      if (isStandaloneApp()) return;
+      event.preventDefault();
+      setDeferredInstallPrompt(event);
+      trackInstallOnce("install_prompt_shown", { platform, install_method: "native_prompt" });
+    };
+    const onAppInstalled = () => {
+      setDeferredInstallPrompt(null);
+      setIsStandalone(true);
+      trackInstallOnce("app_installed", { platform, install_method: "native_prompt" });
+    };
+    if (isStandaloneApp()) trackInstallOnce("standalone_opened", { platform, install_method: "standalone" });
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
     const reportError = () => trackEvent("app_error", { screen_name: screen, error_type: "javascript_error" });
     const reportUnhandledRejection = () => trackEvent("app_error", { screen_name: screen, error_type: "unhandled_rejection" });
     window.addEventListener("error", reportError);
@@ -539,6 +593,30 @@ function App() {
 
   function trackJourneyViewed() {
     trackEvent("journey_viewed", { evidence_count: evidenceCount, promises_kept: promisesKept });
+  }
+
+  const showIosInstallCard = isIosSafari() && !isStandalone && !iosInstallDismissed;
+  const showNativeInstallButton = Boolean(deferredInstallPrompt) && !isStandalone;
+
+  function dismissIosInstallInstructions() {
+    window.localStorage.setItem(installDismissalKey, "true");
+    setIosInstallDismissed(true);
+    setShowIosInstallInstructions(false);
+    trackEvent("install_dismissed", { platform: "ios", install_method: "home_screen" });
+  }
+
+  async function promptForInstall() {
+    if (!deferredInstallPrompt) return;
+    const promptEvent = deferredInstallPrompt;
+    setDeferredInstallPrompt(null);
+    trackEvent("install_started", { platform: getInstallPlatform(), install_method: "native_prompt" });
+    try {
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      if (choice?.outcome === "dismissed") trackEvent("install_dismissed", { platform: getInstallPlatform(), install_method: "native_prompt" });
+    } catch {
+      // Browsers may withdraw an install prompt; the app remains unchanged.
+    }
   }
 
   function goBack() {
@@ -937,6 +1015,10 @@ function App() {
             dailyPromisesKept,
             promises,
             evidenceEntries,
+            showIosInstallCard,
+            onDismissIosInstall: dismissIosInstallInstructions,
+            showNativeInstallButton,
+            onNativeInstall: promptForInstall,
             onSelectPromise: (promiseId) => startSelectedPromise(promiseId, "dashboard"),
             onBeginToday: () => {
               if (dailyPromisesKept === 3) return goToScreen("complete");
@@ -1038,7 +1120,13 @@ function App() {
             nameError,
             onNameChange: setNameDraft,
             onSaveName: saveNameFromSettings,
-            onReset: resetPrototype
+            onReset: resetPrototype,
+            isIosSafari: isIosSafari() && !isStandalone,
+            showIosInstallInstructions,
+            onShowIosInstallInstructions: () => setShowIosInstallInstructions(true),
+            onDismissIosInstall: dismissIosInstallInstructions,
+            showNativeInstallButton,
+            onNativeInstall: promptForInstall
           })
       ),
       showBottomNav &&
@@ -1395,7 +1483,7 @@ function BuilderCalendar({ evidenceEntries, selectedDate, onSelectDate, compact 
   );
 }
 
-function DashboardScreen({ greeting, builderGoal, trustScore, selfTrustLabel, builderScore, currentStreak, evidenceCount, dailyPromisesKept, promises, evidenceEntries, onSelectPromise, onBeginToday, onSelectJourneyDate, onReset, onBack }) {
+function DashboardScreen({ greeting, builderGoal, trustScore, selfTrustLabel, builderScore, currentStreak, evidenceCount, dailyPromisesKept, promises, evidenceEntries, showIosInstallCard, onDismissIosInstall, showNativeInstallButton, onNativeInstall, onSelectPromise, onBeginToday, onSelectJourneyDate, onReset, onBack }) {
   const isComplete = dailyPromisesKept === 3;
   const homeActionLabel = getHomeActionLabel(dailyPromisesKept);
   const missionLabel = isComplete ? "Mission Complete" : "Today's Mission";
@@ -1421,6 +1509,8 @@ function DashboardScreen({ greeting, builderGoal, trustScore, selfTrustLabel, bu
         { className: "mt-8" },
         h(PrimaryButton, { onClick: onBeginToday }, homeActionLabel)
       ),
+      showIosInstallCard && h(IosInstallCard, { onDismiss: onDismissIosInstall }),
+      showNativeInstallButton && h("div", { className: "mt-4" }, h(InstallButton, { onClick: onNativeInstall })),
       h(
         "div",
         { className: "mt-8 rounded-lg border border-midnight-300/20 bg-midnight-500/10 p-5" },
@@ -1951,7 +2041,7 @@ function ProfileStoryRow({ label, value }) {
   );
 }
 
-function SettingsScreen({ nameDraft, nameError, onNameChange, onSaveName, onReset, onBack }) {
+function SettingsScreen({ nameDraft, nameError, onNameChange, onSaveName, onReset, isIosSafari, showIosInstallInstructions, onShowIosInstallInstructions, onDismissIosInstall, showNativeInstallButton, onNativeInstall, onBack }) {
   return h(
     Screen,
     { onBack, withBottomNav: true },
@@ -1983,6 +2073,11 @@ function SettingsScreen({ nameDraft, nameError, onNameChange, onSaveName, onRese
         h("p", { className: "text-xs uppercase tracking-[0.18em] text-white/35" }, "Prototype"),
         h("button", { className: "mt-3 cursor-pointer touch-manipulation text-sm font-semibold text-white/55 transition duration-[100ms] hover:text-white/78", type: "button", onClick: onReset }, "Reset Prototype")
       ),
+      isIosSafari &&
+        (showIosInstallInstructions
+          ? h(IosInstallCard, { onDismiss: onDismissIosInstall })
+          : h("button", { className: "cursor-pointer touch-manipulation text-left text-sm font-semibold text-midnight-300 transition duration-[100ms]", type: "button", onClick: onShowIosInstallInstructions }, "Install VERAKAI")),
+      showNativeInstallButton && h(InstallButton, { onClick: onNativeInstall }),
       h(
         "div",
         { className: "rounded-lg border border-white/10 bg-white/[0.035] p-4" },
@@ -1992,6 +2087,21 @@ function SettingsScreen({ nameDraft, nameError, onNameChange, onSaveName, onRese
       )
     )
   );
+}
+
+function IosInstallCard({ onDismiss }) {
+  return h(
+    "aside",
+    { className: "mt-4 rounded-lg border border-midnight-300/30 bg-midnight-500/10 p-4" },
+    h("p", { className: "text-sm font-semibold text-white/88" }, "Install VERAKAI"),
+    h("p", { className: "mt-2 text-sm leading-6 text-white/55" }, "Add VERAKAI to your Home Screen for a focused, app-like experience."),
+    h("ol", { className: "mt-3 space-y-1 text-sm leading-6 text-white/62" }, h("li", null, "1. Tap the Share button."), h("li", null, "2. Select Add to Home Screen."), h("li", null, "3. Tap Add.")),
+    h("button", { className: "mt-4 cursor-pointer touch-manipulation text-sm font-semibold text-midnight-300", type: "button", onClick: onDismiss }, "Got it")
+  );
+}
+
+function InstallButton({ onClick }) {
+  return h("button", { className: "w-full rounded-lg border border-midnight-300/45 bg-midnight-500/18 px-4 py-3 text-sm font-semibold text-white transition duration-[100ms]", type: "button", onClick }, "Install VERAKAI");
 }
 
 function BottomNav({ activeScreen, onNavigate }) {
