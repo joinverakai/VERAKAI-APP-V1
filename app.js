@@ -2,7 +2,7 @@ const { useEffect, useMemo, useState } = React;
 const h = React.createElement;
 
 const storageKey = "verakai-prototype-state-v5";
-const onboardingAreas = ["Fitness", "Business", "Consistency", "Confidence", "Money", "Purpose"];
+const onboardingAreas = ["Fitness", "Business", "Consistency", "Confidence", "Money", "Purpose", "Other"];
 const promiseCategories = ["Fitness", "Business", "Discipline", "Focus", "Confidence", "Learning", "Money", "Purpose", "Relationships", "Health"];
 const estimateOptions = ["10 min", "20 min", "30 min", "60 min", "2 hr", "Today"];
 const goalSuggestionGroups = {
@@ -10,25 +10,53 @@ const goalSuggestionGroups = {
     ["Build for 60 minutes", "Business", "60 min"],
     ["Reach out to 5 prospects", "Business", "30 min"],
     ["Finish one important feature", "Business", "60 min"],
-    ["Review finances", "Money", "30 min"],
-    ["Plan tomorrow", "Purpose", "10 min"]
+    ["Write the next sales message", "Business", "20 min"],
+    ["Review today's business priorities", "Business", "10 min"]
   ],
   fitness: [
     ["Lift for 45 minutes", "Fitness", "60 min"],
     ["Walk 10,000 steps", "Fitness", "Today"],
     ["Hit protein goal", "Health", "Today"],
-    ["Stretch", "Health", "10 min"],
+    ["Prepare a healthy meal", "Health", "30 min"],
     ["Sleep before 10:30", "Health", "Today"]
+  ],
+  running: [
+    ["Complete today's training run", "Fitness", "60 min"],
+    ["Walk for 10 minutes after the run", "Health", "10 min"],
+    ["Stretch your calves and hips", "Health", "10 min"],
+    ["Review your next run", "Fitness", "10 min"],
+    ["Set out your running gear", "Discipline", "10 min"]
   ],
   discipline: [
     ["Complete one difficult task", "Discipline", "60 min"],
     ["Keep your phone away for one hour", "Focus", "60 min"],
     ["Wake up on time", "Discipline", "Today"],
-    ["Review tomorrow before bed", "Purpose", "10 min"],
+    ["Work in one distraction-free block", "Focus", "30 min"],
     ["Finish before you rest", "Discipline", "Today"]
   ],
-  default: [
-    ["Finish one important task", "Purpose", "60 min"],
+  confidence: [
+    ["Start one conversation", "Relationships", "10 min"],
+    ["Say what you mean once", "Confidence", "10 min"],
+    ["Practice your introduction", "Confidence", "10 min"],
+    ["Send the message you have avoided", "Confidence", "10 min"],
+    ["Write down one win", "Confidence", "10 min"]
+  ],
+  money: [
+    ["Review every purchase today", "Money", "20 min"],
+    ["Transfer money to savings", "Money", "10 min"],
+    ["Check your account balances", "Money", "10 min"],
+    ["Learn one money skill", "Learning", "20 min"],
+    ["Plan tomorrow's spending", "Money", "10 min"]
+  ],
+  purpose: [
+    ["Write for 20 minutes", "Purpose", "20 min"],
+    ["Read something that expands you", "Learning", "20 min"],
+    ["Take a quiet walk", "Purpose", "20 min"],
+    ["Name one value to live by today", "Purpose", "10 min"],
+    ["Reflect before bed", "Purpose", "10 min"]
+  ],
+  custom: [
+    ["Finish one important task", "Focus", "60 min"],
     ["Move your body", "Fitness", "30 min"],
     ["Reach out to one person", "Relationships", "10 min"],
     ["Review your money", "Money", "20 min"],
@@ -66,16 +94,34 @@ function createBlankPromises() {
   return [1, 2, 3].map((id) => ({ id, title: "", category: "", estimate: "", completed: false }));
 }
 
-function getGoalSuggestionKey(builderGoal) {
-  const goal = builderGoal.toLowerCase();
-  if (goal.includes("business") || goal.includes("launch") || goal.includes("company") || goal.includes("sales")) return "business";
-  if (goal.includes("lose") || goal.includes("weight") || goal.includes("fitness") || goal.includes("pound") || goal.includes("health")) return "fitness";
-  if (goal.includes("discipline") || goal.includes("consistent") || goal.includes("focus")) return "discipline";
-  return "default";
+function getSuggestionKeyFromText(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "";
+  if (/(run|running|marathon|endurance|race|miles?)/.test(text)) return "running";
+  if (/(business|career|company|launch|startup|sales|client|prospect|work|job)/.test(text)) return "business";
+  if (/(lose|weight|fitness|pounds?|health|workout|exercise|lift|protein|strength)/.test(text)) return "fitness";
+  if (/(discipline|disciplined|consisten|focus|procrastination|routine|habit|productive)/.test(text)) return "discipline";
+  if (/(confidence|confident|social|friend|dating|conversation|speak|presentation)/.test(text)) return "confidence";
+  if (/(money|financial|finance|wealth|debt|budget|saving|invest|income)/.test(text)) return "money";
+  if (/(purpose|meaning|personal growth|growth|values|direction|self.discovery)/.test(text)) return "purpose";
+  return "";
 }
 
-function createSuggestedPromises(builderGoal) {
-  const suggestions = goalSuggestionGroups[getGoalSuggestionKey(builderGoal || "")];
+function getGoalSuggestionKey(builderGoal = "", selectedAreas = [], customOtherArea = "") {
+  const goalMatch = getSuggestionKeyFromText(builderGoal);
+  if (goalMatch) return goalMatch;
+
+  const selectedAreaMatch = selectedAreas
+    .map((area) => getSuggestionKeyFromText(area))
+    .find(Boolean);
+  if (selectedAreaMatch) return selectedAreaMatch;
+
+  const customAreaMatch = getSuggestionKeyFromText(customOtherArea);
+  return customAreaMatch || "custom";
+}
+
+function createSuggestedPromises(builderGoal, selectedAreas = [], customOtherArea = "") {
+  const suggestions = goalSuggestionGroups[getGoalSuggestionKey(builderGoal, selectedAreas, customOtherArea)];
   return suggestions.map(([title, category, estimate]) => ({
     title,
     category,
@@ -97,16 +143,16 @@ function applySuggestionToPromises(promises, suggestion, promiseId) {
   return next;
 }
 
-function createTomorrowSuggestions(builderGoal) {
-  return createSuggestedPromises(builderGoal).slice(0, 3).map((suggestion, index) => ({
+function createTomorrowSuggestions(builderGoal, selectedAreas, customOtherArea) {
+  return createSuggestedPromises(builderGoal, selectedAreas, customOtherArea).slice(0, 3).map((suggestion, index) => ({
     id: index + 1,
     ...suggestion,
     completed: false
   }));
 }
 
-function getDaySuggestions(builderGoal) {
-  return createSuggestedPromises(builderGoal);
+function getDaySuggestions(builderGoal, selectedAreas, customOtherArea) {
+  return createSuggestedPromises(builderGoal, selectedAreas, customOtherArea);
 }
 
 function getTrustLabel(score) {
@@ -223,6 +269,7 @@ function getInitialState() {
     builderSince: getBuilderSinceLabel(),
     builderGoal: "",
     selectedAreas: [],
+    customOtherArea: "",
     trustScore: 5,
     promises: [],
     activePromiseId: null,
@@ -289,6 +336,8 @@ function App() {
   const [nameDraft, setNameDraft] = useState(initialState.userName);
   const [nameError, setNameError] = useState("");
   const [selectedAreas, setSelectedAreas] = useState(initialState.selectedAreas);
+  const [customOtherArea, setCustomOtherArea] = useState(initialState.customOtherArea);
+  const [startingPointError, setStartingPointError] = useState("");
   const [trustScore, setTrustScore] = useState(initialState.trustScore);
   const [promises, setPromises] = useState(initialState.promises);
   const [activePromiseId, setActivePromiseId] = useState(initialState.activePromiseId);
@@ -330,6 +379,7 @@ function App() {
       builderSince,
       builderGoal,
       selectedAreas,
+      customOtherArea,
       trustScore,
       promises,
       activePromiseId,
@@ -354,6 +404,7 @@ function App() {
     builderSince,
     builderGoal,
     selectedAreas,
+    customOtherArea,
     trustScore,
     promises,
     activePromiseId,
@@ -440,7 +491,7 @@ function App() {
   function runPrimaryAction() {
     if (screen === "welcome") return goToScreen("name") || true;
     if (screen === "name") return submitName();
-    if (screen === "build") return goToScreen("goal") || true;
+    if (screen === "build") return submitStartingPoint();
     if (screen === "goal") return submitBuilderGoal();
     if (screen === "assessment") return goToScreen("promises") || true;
     if (screen === "dashboard") return goToScreen("promises") || true;
@@ -499,6 +550,17 @@ function App() {
 
   function toggleArea(area) {
     setSelectedAreas((current) => (current.includes(area) ? current.filter((item) => item !== area) : [...current, area]));
+    setStartingPointError("");
+  }
+
+  function submitStartingPoint() {
+    if (selectedAreas.includes("Other") && !customOtherArea.trim()) {
+      setStartingPointError("Tell us what area you want to improve.");
+      return true;
+    }
+    setStartingPointError("");
+    goToScreen("goal");
+    return true;
   }
 
   function updatePromise(id, field, value) {
@@ -599,7 +661,7 @@ function App() {
 
   function prepareTomorrow() {
     if (tomorrowsPromises.length === 0) {
-      setTomorrowsPromises(createTomorrowSuggestions(builderGoal));
+      setTomorrowsPromises(createTomorrowSuggestions(builderGoal, selectedAreas, customOtherArea));
     }
     goToScreen("tomorrow");
     return true;
@@ -624,6 +686,8 @@ function App() {
     setBuilderGoalError("");
     setNameDraft("");
     setSelectedAreas([]);
+    setCustomOtherArea("");
+    setStartingPointError("");
     setTrustScore(5);
     setPromises([]);
     setActivePromiseId(null);
@@ -678,8 +742,14 @@ function App() {
           h(BuildScreen, {
             ...navigationProps,
             selectedAreas,
+            customOtherArea,
+            error: startingPointError,
             onToggleArea: toggleArea,
-            onContinue: () => goToScreen("goal")
+            onCustomAreaChange: (value) => {
+              setCustomOtherArea(value);
+              setStartingPointError("");
+            },
+            onContinue: submitStartingPoint
           }),
         screen === "goal" &&
           h(BuilderGoalScreen, {
@@ -727,7 +797,7 @@ function App() {
           h(PromisesScreen, {
             ...navigationProps,
             promises,
-            suggestions: getDaySuggestions(builderGoal),
+            suggestions: getDaySuggestions(builderGoal, selectedAreas, customOtherArea),
             message: promiseMessage,
             isLocked: isPromiseSetValid,
             hasSeenDashboard,
@@ -986,7 +1056,7 @@ function NameScreen({ nameDraft, error, onNameChange, onContinue, onBack }) {
   );
 }
 
-function BuildScreen({ selectedAreas, onToggleArea, onContinue, onBack }) {
+function BuildScreen({ selectedAreas, customOtherArea, error, onToggleArea, onCustomAreaChange, onContinue, onBack }) {
   return h(
     Screen,
     { onBack },
@@ -1000,6 +1070,21 @@ function BuildScreen({ selectedAreas, onToggleArea, onContinue, onBack }) {
       { className: "mt-10 grid grid-cols-2 gap-3" },
       onboardingAreas.map((area) => h(SelectableCard, { key: area, label: area, selected: selectedAreas.includes(area), onClick: () => onToggleArea(area) }))
     ),
+    selectedAreas.includes("Other") &&
+      h(
+        "div",
+        { className: "mt-4 grid gap-2" },
+        h("label", { className: "text-sm font-medium text-white/72", htmlFor: "custom-other-area" }, "What area do you want to improve?"),
+        h("input", {
+          id: "custom-other-area",
+          className: "promise-input",
+          value: customOtherArea,
+          placeholder: "Write your area",
+          onChange: (event) => onCustomAreaChange(event.target.value),
+          "aria-label": "What area do you want to improve?"
+        }),
+        error && h("p", { className: "text-sm font-medium text-white/45" }, error)
+      ),
     h("div", { className: "mt-auto pt-10" }, h(PrimaryButton, { onClick: onContinue }, "Continue"))
   );
 }
