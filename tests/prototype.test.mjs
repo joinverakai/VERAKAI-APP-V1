@@ -134,10 +134,10 @@ assert.ok(app.includes('!customOtherArea.trim()'), "Other should require a custo
 assert.ok(app.includes("customOtherArea,"), "Custom Other value should be included in persisted state");
 assert.ok(app.includes('setCustomOtherArea("")'), "Reset should clear the custom Other value");
 
-const helperEnd = app.indexOf("function getTrustLabel");
+const helperEnd = app.indexOf("function getInitialState");
 assert.ok(helperEnd > 0, "Suggestion helpers should be available for testing");
 const capturedEvents = [];
-const helperSource = `${app.slice(0, helperEnd)}\nglobalThis.verakaiHelpers = { getGoalSuggestionKey, createSuggestedPromises, trackEvent };`;
+const helperSource = `${app.slice(0, helperEnd)}\nglobalThis.verakaiHelpers = { createNewDayState, getGoalSuggestionKey, createSuggestedPromises, trackEvent };`;
 const helperContext = {
   React: { createElement: () => null, useEffect: () => null, useMemo: () => null, useState: () => null },
   window: {
@@ -147,7 +147,32 @@ const helperContext = {
   }
 };
 vm.runInNewContext(helperSource, helperContext);
-const { getGoalSuggestionKey, createSuggestedPromises, trackEvent } = helperContext.verakaiHelpers;
+const { createNewDayState, getGoalSuggestionKey, createSuggestedPromises, trackEvent } = helperContext.verakaiHelpers;
+
+const newDayState = createNewDayState({
+  screen: "dashboard",
+  userName: "Private name",
+  builderGoal: "Private goal",
+  hasSeenDashboard: true,
+  tomorrowsPromises: []
+}, "2026-07-13");
+assert.equal(newDayState.screen, "promises", "A new day should open the promise board");
+assert.equal(newDayState.hasSeenDashboard, false, "A new day should show editable promise inputs instead of the locked chooser");
+assert.equal(newDayState.promises.length, 3, "A new day without plans should create three blank promise inputs");
+assert.ok(newDayState.promises.every((promise) => !promise.completed), "A new day should reset completed promise state");
+assert.equal(newDayState.lastActiveDate, "2026-07-13", "A new day should persist its local calendar date");
+
+const plannedDayState = createNewDayState({
+  screen: "dashboard",
+  userName: "Private name",
+  builderGoal: "Private goal",
+  hasSeenDashboard: true,
+  tomorrowsPromises: [{ id: 8, title: "Private planned task", category: "Focus", estimate: "30 min", completed: true }]
+}, "2026-07-13");
+assert.equal(plannedDayState.promises[0].id, 1, "Planned promises should receive stable daily IDs");
+assert.equal(plannedDayState.promises[0].completed, false, "Planned promises should be available again on the new day");
+assert.equal(plannedDayState.tomorrowsPromises.length, 0, "Tomorrow's plan should be consumed by the new day");
+assert.ok(app.includes('nextMidnight.setHours(24, 0, 1, 0)'), "The active app should check for a new day just after midnight");
 
 for (const [goal, expectedGroup] of [
   ["Launch my business", "business"],

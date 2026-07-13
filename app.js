@@ -324,6 +324,25 @@ function normalizePromises(promises) {
   }));
 }
 
+function createNewDayState(state, dateKey = getLocalDateKey()) {
+  const plannedPromises = Array.isArray(state.tomorrowsPromises) ? state.tomorrowsPromises : [];
+  const promisesForToday = plannedPromises.map((promise, index) => ({ ...promise, id: index + 1, completed: false }));
+
+  return {
+    ...state,
+    screen: state.userName && state.builderGoal ? "promises" : state.screen,
+    promises: promisesForToday.length ? promisesForToday : createBlankPromises(),
+    tomorrowsPromises: [],
+    activePromiseId: null,
+    sessionReturnScreen: "promises",
+    selectedEvidenceChips: [],
+    evidenceReflection: "",
+    closingReflection: "",
+    hasSeenDashboard: false,
+    lastActiveDate: dateKey
+  };
+}
+
 function getInitialState() {
   const fallback = {
     screen: "welcome",
@@ -356,7 +375,6 @@ function getInitialState() {
     const normalizedPromises = Array.isArray(saved.promises) ? normalizePromises(saved.promises) : fallback.promises;
     const normalizedTomorrow = Array.isArray(saved.tomorrowsPromises) ? normalizePromises(saved.tomorrowsPromises) : fallback.tomorrowsPromises;
     const isNewDay = saved.lastActiveDate && saved.lastActiveDate !== getLocalDateKey();
-    const movedPromises = normalizedTomorrow.map((promise, index) => ({ ...promise, id: index + 1, completed: false }));
     const resumedState = {
       ...fallback,
       ...saved,
@@ -369,18 +387,7 @@ function getInitialState() {
       lastActiveDate: saved.lastActiveDate || fallback.lastActiveDate
     };
     if (!isNewDay) return resumedState;
-    return {
-      ...resumedState,
-      screen: saved.userName && saved.builderGoal ? "promises" : resumedState.screen,
-      promises: movedPromises.length ? movedPromises : createBlankPromises(),
-      tomorrowsPromises: [],
-      activePromiseId: null,
-      sessionReturnScreen: "promises",
-      selectedEvidenceChips: [],
-      evidenceReflection: "",
-      closingReflection: "",
-      lastActiveDate: getLocalDateKey()
-    };
+    return createNewDayState(resumedState);
   } catch {
     return fallback;
   }
@@ -547,6 +554,52 @@ function App() {
     const timer = window.setInterval(() => setElapsedSeconds((seconds) => seconds + 1), 1000);
     return () => window.clearInterval(timer);
   }, [sessionStarted]);
+
+  useEffect(() => {
+    function resetForNewDay() {
+      const today = getLocalDateKey();
+      if (today === lastActiveDate) return;
+
+      const nextState = createNewDayState(
+        {
+          screen,
+          userName,
+          builderGoal,
+          tomorrowsPromises
+        },
+        today
+      );
+
+      setPromises(nextState.promises);
+      setTomorrowsPromises([]);
+      setActivePromiseId(null);
+      setSessionReturnScreen("promises");
+      setSessionStarted(false);
+      setElapsedSeconds(0);
+      setSelectedEvidenceChips([]);
+      setEvidenceReflection("");
+      setClosingReflection("");
+      setHasSeenDashboard(false);
+      setPromiseMessage("");
+      setSuggestionPromiseId(null);
+      setLastActiveDate(today);
+      setTransition((current) => ({ key: current.key + 1, direction: "forward" }));
+      setScreen(nextState.screen);
+    }
+
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 1, 0);
+    const midnightTimer = window.setTimeout(resetForNewDay, Math.max(1000, nextMidnight.getTime() - now.getTime()));
+
+    window.addEventListener("focus", resetForNewDay);
+    document.addEventListener("visibilitychange", resetForNewDay);
+    return () => {
+      window.clearTimeout(midnightTimer);
+      window.removeEventListener("focus", resetForNewDay);
+      document.removeEventListener("visibilitychange", resetForNewDay);
+    };
+  }, [lastActiveDate, screen, userName, builderGoal, tomorrowsPromises]);
 
   useEffect(() => {
     if (screen !== "success") return undefined;
