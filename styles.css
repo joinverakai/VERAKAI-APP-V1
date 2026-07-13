@@ -667,7 +667,7 @@ button {
     height: 100dvh;
     min-height: 100dvh !important;
     padding-bottom: calc(2rem + env(safe-area-inset-bottom));
-    padding-top: calc(1.3rem + env(safe-area-inset-top));
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1rem) !important;
   }
 
   .screen-scroll.with-bottom-nav {
