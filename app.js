@@ -2,6 +2,44 @@ const { useEffect, useMemo, useState } = React;
 const h = React.createElement;
 
 const storageKey = "verakai-prototype-state-v5";
+const appVersion = "alpha-0.1";
+const analyticsPropertyAllowlist = {
+  app_opened: ["returning_user"],
+  onboarding_step_completed: ["step_name", "step_number"],
+  starting_point_selected: ["area_category", "selection_action", "selected_count"],
+  builder_goal_set: ["goal_category"],
+  onboarding_completed: ["goal_category", "starting_point_count"],
+  suggestions_viewed: ["goal_category", "suggestion_group"],
+  suggestion_used: ["goal_category", "promise_category", "suggestion_position"],
+  promise_saved: ["source", "promise_category", "time_estimate"],
+  daily_promises_confirmed: ["promise_count"],
+  focus_started: ["promise_category", "time_estimate"],
+  promise_completed: ["promise_category", "focus_duration_seconds"],
+  evidence_saved: ["promise_category", "has_reflection", "evidence_chip_count", "completed_today"],
+  dashboard_viewed: ["completed_today", "evidence_count"],
+  journey_viewed: ["evidence_count", "promises_kept"],
+  day_completed: ["completed_count", "goal_category"],
+  app_error: ["screen_name", "error_type"]
+};
+
+function trackEvent(eventName, properties = {}) {
+  try {
+    if (!window.posthog || typeof window.posthog.capture !== "function") return;
+    const allowedProperties = analyticsPropertyAllowlist[eventName] || [];
+    const safeProperties = allowedProperties.reduce((safe, key) => {
+      if (Object.prototype.hasOwnProperty.call(properties, key)) safe[key] = properties[key];
+      return safe;
+    }, {});
+    window.posthog.capture(eventName, {
+      app_version: appVersion,
+      viewport_width: window.innerWidth,
+      viewport_height: window.innerHeight,
+      ...safeProperties
+    });
+  } catch {
+    // Analytics must never interrupt the product experience.
+  }
+}
 const onboardingAreas = ["Fitness", "Business", "Consistency", "Confidence", "Money", "Purpose", "Other"];
 const promiseCategories = ["Fitness", "Business", "Discipline", "Focus", "Confidence", "Learning", "Money", "Purpose", "Relationships", "Health"];
 const estimateOptions = ["10 min", "20 min", "30 min", "60 min", "2 hr", "Today"];
@@ -91,7 +129,7 @@ const screenOrder = [
 const mainScreens = ["dashboard", "promises", "timeline", "profile", "settings"];
 
 function createBlankPromises() {
-  return [1, 2, 3].map((id) => ({ id, title: "", category: "", estimate: "", completed: false }));
+  return [1, 2, 3].map((id) => ({ id, title: "", category: "", estimate: "", source: "custom", completed: false }));
 }
 
 function getSuggestionKeyFromText(value) {
@@ -138,6 +176,7 @@ function applySuggestionToPromises(promises, suggestion, promiseId) {
     title: suggestion.title,
     category: suggestion.category,
     estimate: suggestion.estimate,
+    source: "suggested",
     completed: false
   };
   return next;
@@ -258,6 +297,7 @@ function normalizePromises(promises) {
     completed: false,
     category: "",
     estimate: "",
+    source: "custom",
     ...promise
   }));
 }
@@ -326,6 +366,13 @@ function getInitialState() {
 
 function App() {
   const initialState = useMemo(getInitialState, []);
+  const [isReturningUser] = useState(() => {
+    try {
+      return Boolean(window.localStorage.getItem(storageKey));
+    } catch {
+      return false;
+    }
+  });
   const [screen, setScreen] = useState(initialState.screen);
   const [transition, setTransition] = useState({ key: 0, direction: "forward" });
   const [userName, setUserName] = useState(initialState.userName);
@@ -359,6 +406,7 @@ function App() {
   const [promiseMessage, setPromiseMessage] = useState("");
   const [suggestionPromiseId, setSuggestionPromiseId] = useState(null);
   const [journeySelectedDate, setJourneySelectedDate] = useState(getLocalDateKey());
+  const completedDayEvents = useMemo(() => new Set(), []);
 
   const activePromise = promises.find((promise) => promise.id === activePromiseId) || promises[0];
   const dailyPromisesKept = promises.filter((promise) => promise.completed).length;
@@ -424,6 +472,23 @@ function App() {
   ]);
 
   useEffect(() => {
+    trackEvent("app_opened", { returning_user: isReturningUser });
+    if (screen === "dashboard") trackDashboardViewed();
+    if (screen === "timeline") trackJourneyViewed();
+  }, []);
+
+  useEffect(() => {
+    const reportError = () => trackEvent("app_error", { screen_name: screen, error_type: "javascript_error" });
+    const reportUnhandledRejection = () => trackEvent("app_error", { screen_name: screen, error_type: "unhandled_rejection" });
+    window.addEventListener("error", reportError);
+    window.addEventListener("unhandledrejection", reportUnhandledRejection);
+    return () => {
+      window.removeEventListener("error", reportError);
+      window.removeEventListener("unhandledrejection", reportUnhandledRejection);
+    };
+  }, [screen]);
+
+  useEffect(() => {
     if (!sessionStarted) return undefined;
     const timer = window.setInterval(() => setElapsedSeconds((seconds) => seconds + 1), 1000);
     return () => window.clearInterval(timer);
@@ -460,8 +525,20 @@ function App() {
       key: current.key + 1,
       direction: screenOrder.indexOf(nextScreen) >= screenOrder.indexOf(screen) ? "forward" : "back"
     }));
-    if (nextScreen === "dashboard") setHasSeenDashboard(true);
+    if (nextScreen === "dashboard") {
+      setHasSeenDashboard(true);
+      if (screen !== "dashboard") trackDashboardViewed();
+    }
+    if (nextScreen === "timeline" && screen !== "timeline") trackJourneyViewed();
     setScreen(nextScreen);
+  }
+
+  function trackDashboardViewed() {
+    trackEvent("dashboard_viewed", { completed_today: dailyPromisesKept, evidence_count: evidenceCount });
+  }
+
+  function trackJourneyViewed() {
+    trackEvent("journey_viewed", { evidence_count: evidenceCount, promises_kept: promisesKept });
   }
 
   function goBack() {
@@ -493,10 +570,10 @@ function App() {
     if (screen === "name") return submitName();
     if (screen === "build") return submitStartingPoint();
     if (screen === "goal") return submitBuilderGoal();
-    if (screen === "assessment") return goToScreen("promises") || true;
+    if (screen === "assessment") return submitSelfTrust();
     if (screen === "dashboard") return goToScreen("promises") || true;
     if (screen === "promises") return validatePromiseSet();
-    if (screen === "session" && !sessionStarted) return setSessionStarted(true) || true;
+    if (screen === "session" && !sessionStarted) return startFocusSession() || true;
     return false;
   }
 
@@ -508,6 +585,7 @@ function App() {
     }
     setUserName(nextName);
     setNameError("");
+    trackEvent("onboarding_step_completed", { step_name: "name", step_number: 1 });
     goToScreen("build");
     return true;
   }
@@ -520,7 +598,20 @@ function App() {
     }
     setBuilderGoal(nextGoal);
     setBuilderGoalError("");
+    const goalCategory = getGoalSuggestionKey(nextGoal, selectedAreas, customOtherArea);
+    trackEvent("builder_goal_set", { goal_category: goalCategory });
+    trackEvent("onboarding_step_completed", { step_name: "builder_goal", step_number: 3 });
     goToScreen("assessment");
+    return true;
+  }
+
+  function submitSelfTrust() {
+    trackEvent("onboarding_step_completed", { step_name: "self_trust", step_number: 4 });
+    trackEvent("onboarding_completed", {
+      goal_category: getGoalSuggestionKey(builderGoal, selectedAreas, customOtherArea),
+      starting_point_count: selectedAreas.length
+    });
+    goToScreen("promises");
     return true;
   }
 
@@ -549,7 +640,16 @@ function App() {
   }
 
   function toggleArea(area) {
-    setSelectedAreas((current) => (current.includes(area) ? current.filter((item) => item !== area) : [...current, area]));
+    setSelectedAreas((current) => {
+      const selected = current.includes(area);
+      const next = selected ? current.filter((item) => item !== area) : [...current, area];
+      trackEvent("starting_point_selected", {
+        area_category: area === "Other" ? "other" : getSuggestionKeyFromText(area) || "other",
+        selection_action: selected ? "deselected" : "selected",
+        selected_count: next.length
+      });
+      return next;
+    });
     setStartingPointError("");
   }
 
@@ -559,19 +659,36 @@ function App() {
       return true;
     }
     setStartingPointError("");
+    trackEvent("onboarding_step_completed", { step_name: "starting_point", step_number: 2 });
     goToScreen("goal");
     return true;
   }
 
   function updatePromise(id, field, value) {
     setPromiseMessage("");
-    setPromises((current) => current.map((promise) => (promise.id === id ? { ...promise, [field]: value } : promise)));
+    setPromises((current) => current.map((promise) => (promise.id === id ? { ...promise, [field]: value, ...(field === "title" ? { source: "custom" } : {}) } : promise)));
   }
 
   function usePromiseSuggestion(suggestion) {
     setPromiseMessage("");
+    const suggestions = getDaySuggestions(builderGoal, selectedAreas, customOtherArea);
+    trackEvent("suggestion_used", {
+      goal_category: getGoalSuggestionKey(builderGoal, selectedAreas, customOtherArea),
+      promise_category: suggestion.category || "other",
+      suggestion_position: Math.max(0, suggestions.findIndex((item) => item.title === suggestion.title)) + 1
+    });
     setPromises((current) => applySuggestionToPromises(current, suggestion, suggestionPromiseId));
     setSuggestionPromiseId(null);
+  }
+
+  function openSuggestions(promiseId) {
+    if (suggestionPromiseId === promiseId) return;
+    const suggestionGroup = getGoalSuggestionKey(builderGoal, selectedAreas, customOtherArea);
+    trackEvent("suggestions_viewed", {
+      goal_category: suggestionGroup,
+      suggestion_group: suggestionGroup
+    });
+    setSuggestionPromiseId(promiseId);
   }
 
   function validatePromiseSet() {
@@ -581,6 +698,15 @@ function App() {
     }
     if (!hasSeenDashboard) {
       setPromiseMessage("");
+      promises.forEach((promise) => {
+        trackEvent("promise_saved", {
+          source: promise.source === "suggested" ? "suggested" : "custom",
+          promise_category: promise.category || "other",
+          time_estimate: promise.estimate
+        });
+      });
+      trackEvent("onboarding_step_completed", { step_name: "daily_promises", step_number: 5 });
+      trackEvent("daily_promises_confirmed", { promise_count: promises.length });
       goToScreen("dashboard");
       return true;
     }
@@ -609,7 +735,17 @@ function App() {
     return true;
   }
 
+  function startFocusSession() {
+    if (!activePromise || sessionStarted) return;
+    setSessionStarted(true);
+    trackEvent("focus_started", { promise_category: activePromise.category || "other", time_estimate: activePromise.estimate || "unspecified" });
+  }
+
   function completePromise() {
+    trackEvent("promise_completed", {
+      promise_category: activePromise?.category || "other",
+      focus_duration_seconds: elapsedSeconds
+    });
     setSessionStarted(false);
     setSelectedEvidenceChips([]);
     setEvidenceReflection("");
@@ -656,6 +792,22 @@ function App() {
     setEvidenceEntries((current) => [evidenceEntry, ...current]);
     setBuilderCoachData((current) => [coachEntry, ...current]);
     setTimelineItems((current) => [{ id: evidenceEntry.id, label: evidenceEntry.date, text: evidenceEntry.promiseTitle }, ...current]);
+    trackEvent("evidence_saved", {
+      promise_category: activePromise?.category || "other",
+      has_reflection: Boolean(evidenceReflection.trim()),
+      evidence_chip_count: selectedEvidenceChips.length,
+      completed_today: completedAfterSave
+    });
+    if (!wasAlreadyCompleted && completedAfterSave === 3) {
+      const completionDay = getLocalDateKey(new Date(completionTimestamp));
+      if (!completedDayEvents.has(completionDay)) {
+        completedDayEvents.add(completionDay);
+        trackEvent("day_completed", {
+          completed_count: completedAfterSave,
+          goal_category: getGoalSuggestionKey(builderGoal, selectedAreas, customOtherArea)
+        });
+      }
+    }
     goToScreen("dashboard");
   }
 
@@ -726,7 +878,10 @@ function App() {
       h(
         ScreenTransition,
         { animationKey: transition.key, direction: transition.direction },
-        screen === "welcome" && h(WelcomeScreen, { onBegin: () => goToScreen("name") }),
+        screen === "welcome" && h(WelcomeScreen, { onBegin: () => {
+          trackEvent("onboarding_started");
+          goToScreen("name");
+        } }),
         screen === "name" &&
           h(NameScreen, {
             ...navigationProps,
@@ -767,7 +922,7 @@ function App() {
             ...navigationProps,
             trustScore,
             onScoreChange: setTrustScore,
-            onContinue: () => goToScreen("promises")
+            onContinue: submitSelfTrust
           }),
         screen === "dashboard" &&
           h(DashboardScreen, {
@@ -804,7 +959,7 @@ function App() {
             dailyPromisesKept,
             builderGoal,
             suggestionPromiseId,
-            onOpenSuggestions: setSuggestionPromiseId,
+            onOpenSuggestions: openSuggestions,
             onCloseSuggestions: () => setSuggestionPromiseId(null),
             onUpdatePromise: updatePromise,
             onUseSuggestion: usePromiseSuggestion,
@@ -817,7 +972,7 @@ function App() {
             promise: activePromise,
             elapsedSeconds,
             sessionStarted,
-            onBegin: () => setSessionStarted(true),
+            onBegin: startFocusSession,
             onPause: () => setSessionStarted(false),
             onComplete: completePromise,
             onExitFocus: goBack

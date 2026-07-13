@@ -12,6 +12,13 @@ assert.ok(html.includes("VERAKAI Prototype"), "HTML title should describe the VE
 assert.ok(html.includes("viewport-fit=cover"), "Viewport should support full-screen mobile safe areas");
 assert.ok(html.includes("react.production.min.js"), "React should be loaded for the prototype");
 assert.ok(html.includes("tailwindcss.com"), "Tailwind should be loaded for utility classes");
+assert.equal((html.match(/posthog\.init\(/g) || []).length, 1, "PostHog should be initialized exactly once");
+assert.ok(html.includes("autocapture: false"), "PostHog autocapture should be disabled");
+assert.ok(html.includes("maskAllInputs: true"), "Session recordings should mask every input");
+assert.ok(html.includes("maskTextSelector: '*'"), "Session recordings should mask all visible text");
+assert.ok(html.includes("request.requestBody = undefined"), "Network request bodies should be removed from recordings");
+assert.ok(html.includes("request.responseBody = undefined"), "Network response bodies should be removed from recordings");
+assert.ok(!html.includes("posthog.identify("), "Anonymous analytics must never identify a person");
 
 for (const phrase of [
   "Become someone who follows through.",
@@ -97,12 +104,18 @@ assert.ok(app.includes('setCustomOtherArea("")'), "Reset should clear the custom
 
 const helperEnd = app.indexOf("function getTrustLabel");
 assert.ok(helperEnd > 0, "Suggestion helpers should be available for testing");
-const helperSource = `${app.slice(0, helperEnd)}\nglobalThis.verakaiHelpers = { getGoalSuggestionKey, createSuggestedPromises };`;
+const capturedEvents = [];
+const helperSource = `${app.slice(0, helperEnd)}\nglobalThis.verakaiHelpers = { getGoalSuggestionKey, createSuggestedPromises, trackEvent };`;
 const helperContext = {
-  React: { createElement: () => null, useEffect: () => null, useMemo: () => null, useState: () => null }
+  React: { createElement: () => null, useEffect: () => null, useMemo: () => null, useState: () => null },
+  window: {
+    innerWidth: 390,
+    innerHeight: 844,
+    posthog: { capture: (eventName, properties) => capturedEvents.push({ eventName, properties }) }
+  }
 };
 vm.runInNewContext(helperSource, helperContext);
-const { getGoalSuggestionKey, createSuggestedPromises } = helperContext.verakaiHelpers;
+const { getGoalSuggestionKey, createSuggestedPromises, trackEvent } = helperContext.verakaiHelpers;
 
 for (const [goal, expectedGroup] of [
   ["Launch my business", "business"],
@@ -127,6 +140,45 @@ assert.notDeepEqual(
   createSuggestedPromises("Lose 20 pounds").map((suggestion) => suggestion.title),
   "Different goal groups should return different suggestions"
 );
+
+trackEvent("builder_goal_set", {
+  goal_category: "business",
+  user_name: "Ty",
+  builder_goal: "Launch my private company",
+  promise_title: "Private task",
+  reflection: "Private reflection"
+});
+assert.equal(JSON.stringify(capturedEvents[0]), JSON.stringify({
+  eventName: "builder_goal_set",
+  properties: { app_version: "alpha-0.1", viewport_width: 390, viewport_height: 844, goal_category: "business" }
+}), "Analytics helper should allow only approved, non-sensitive properties");
+
+for (const eventName of [
+  "app_opened",
+  "onboarding_started",
+  "onboarding_step_completed",
+  "starting_point_selected",
+  "builder_goal_set",
+  "onboarding_completed",
+  "suggestions_viewed",
+  "suggestion_used",
+  "promise_saved",
+  "daily_promises_confirmed",
+  "focus_started",
+  "promise_completed",
+  "evidence_saved",
+  "dashboard_viewed",
+  "journey_viewed",
+  "day_completed",
+  "app_error"
+]) {
+  assert.ok(app.includes(`"${eventName}"`), `Analytics should include ${eventName}`);
+}
+
+assert.ok(app.includes('if (screen !== "dashboard") trackDashboardViewed()'), "Dashboard events should only fire on an actual screen transition");
+assert.ok(app.includes('if (nextScreen === "timeline" && screen !== "timeline") trackJourneyViewed()'), "Journey events should only fire on an actual screen transition");
+assert.ok(app.includes('if (!completedDayEvents.has(completionDay))'), "Day completion should only fire once per completed day");
+assert.ok(app.indexOf('const evidenceEntry = {') < app.indexOf('trackEvent("evidence_saved"'), "Evidence should be assembled before its event is tracked");
 
 assert.ok(styles.includes(".phone-frame"), "Phone frame styles should exist");
 assert.ok(styles.includes(".trust-range"), "Assessment slider styles should exist");
