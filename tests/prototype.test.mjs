@@ -42,6 +42,10 @@ assert.ok(serviceWorker.includes('request.method !== "GET"'), "Service worker sh
 assert.ok(serviceWorker.includes("isPostHogRequest"), "Service worker should explicitly exclude PostHog traffic");
 assert.equal((html.match(/posthog\.init\(/g) || []).length, 1, "PostHog should be initialized exactly once");
 assert.ok(html.includes("autocapture: false"), "PostHog autocapture should be disabled");
+assert.ok(html.includes("capture_pageview: true"), "PostHog should capture pageviews for Web Analytics");
+assert.ok(html.includes("capture_pageleave: true"), "PostHog should capture page leaves");
+assert.ok(serviceWorker.includes('const CACHE_NAME = "verakai-shell-v2"'), "Service worker should use the refreshed cache version");
+assert.ok(serviceWorker.includes('NETWORK_FIRST_ASSETS = new Set(["index.html", "app.js", "styles.css"])'), "Core shell assets should use network-first caching");
 assert.ok(html.includes("maskAllInputs: true"), "Session recordings should mask every input");
 assert.ok(html.includes("maskTextSelector: '*'"), "Session recordings should mask all visible text");
 assert.ok(html.includes("request.requestBody = undefined"), "Network request bodies should be removed from recordings");

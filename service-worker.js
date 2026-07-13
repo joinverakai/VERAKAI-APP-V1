@@ -1,4 +1,4 @@
-const CACHE_NAME = "verakai-shell-v1";
+const CACHE_NAME = "verakai-shell-v2";
 const CACHE_PREFIX = "verakai-shell-";
 const APP_SHELL = [
   "./",
@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./icons/verakai-maskable-512.png",
   "./icons/apple-touch-icon-180.png"
 ];
+const NETWORK_FIRST_ASSETS = new Set(["index.html", "app.js", "styles.css"]);
 
 function isPostHogRequest(url) {
   return url.hostname.includes("posthog") || url.pathname.startsWith("/e/");
@@ -66,7 +67,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
 
   if (request.method !== "GET" || url.origin !== self.location.origin || isPostHogRequest(url)) return;
-  if (request.mode === "navigate") {
+  if (request.mode === "navigate" || NETWORK_FIRST_ASSETS.has(url.pathname.split("/").pop())) {
     event.respondWith(networkFirst(request));
     return;
   }
