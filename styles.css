@@ -629,7 +629,7 @@ button {
   }
 }
 
-@media (max-width: 430px) {
+@media (max-width: 480px) {
   html,
   body,
   #root {
@@ -648,10 +648,10 @@ button {
   .phone-frame {
     height: 100dvh !important;
     min-height: 100dvh !important;
-    width: 100vw;
-    max-width: none;
+    width: 100%;
+    max-width: none !important;
     border: 0;
-    border-radius: 0;
+    border-radius: 0 !important;
     box-shadow: none;
   }
 
